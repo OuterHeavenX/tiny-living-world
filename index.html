@@ -20,7 +20,7 @@
 html{touch-action:manipulation;-webkit-text-size-adjust:100%;height:100%}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{margin:0;height:100%;background:#172827;color:#fff;font:15px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden;overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-#scene{position:fixed;inset:0}
+#scene{position:fixed;inset:0;background:linear-gradient(to bottom,#72bdea,#d8f0fb)}
 #scene canvas{display:block;touch-action:none}
 #safeProbe{position:fixed;inset:0;padding:var(--sat) var(--sar) var(--sab) var(--sal);visibility:hidden;pointer-events:none}
 
@@ -217,6 +217,7 @@ body:not(.in-game) .ingame-only{display:none}
 
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
+import { buildWorld } from './src/world.js';
 
 const GAME_VERSION = '0.2.0';
 const SAVE_KEY = 'tlw-save';          // unchanged from v0.1 so existing saves keep working
@@ -230,26 +231,21 @@ const DEFAULT_SETTINGS = { sensitivity: 1, shadows: true, autosave: true, hints:
 const settings = { ...DEFAULT_SETTINGS, ...(readJSON(SETTINGS_KEY) || {}) };
 function writeSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch {} }
 
-/* ================= Scene (unchanged town) ================= */
-const scene = new THREE.Scene(); scene.background = new THREE.Color(0xb4def0);
+/* ================= Scene: procedural Willowbrook diorama (src/world.js) ================= */
+const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(48, innerWidth / innerHeight, .1, 500);
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+renderer.setClearColor(0x000000, 0);
 renderer.setSize(innerWidth, innerHeight); renderer.setPixelRatio(Math.min(devicePixelRatio, 1.7));
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
 $('scene').appendChild(renderer.domElement);
-scene.add(new THREE.HemisphereLight(0xfff8dc, 0x637b69, 2));
-const sun = new THREE.DirectionalLight(0xfff3cf, 2.1); sun.position.set(-18, 35, 13); sun.castShadow = settings.shadows;
-sun.shadow.mapSize.set(1024, 1024); sun.shadow.camera.left = -38; sun.shadow.camera.right = 38; sun.shadow.camera.top = 38; sun.shadow.camera.bottom = -38; scene.add(sun);
 const mat = c => new THREE.MeshStandardMaterial({ color: c, roughness: .92 });
-const grass = mat(0x91b978), road = mat(0xe5d4b4), trunk = mat(0x9a6a4a), leaf = mat(0x4e9870), skin = mat(0xffcfad);
-function cube(w, h, d, c, x, y, z, shadow = true) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), typeof c === 'number' ? mat(c) : c); m.position.set(x, y, z); m.castShadow = shadow; m.receiveShadow = true; scene.add(m); return m; }
-cube(64, .45, 64, grass, 0, -.35, 0, false);
-for (const z of [-10, 8]) cube(62, .06, 3.2, road, 0, .01, z, false);
-for (const x of [-13, 0, 13]) cube(3, .06, 58, road, x, .02, 0, false);
+const skin = mat(0xffcfad);
+// Simulation destinations — unchanged from v0.1 (residents walk to these points).
 const sites = [[-20,-20,'Oliver’s Cottage',0xbad2ab],[-7,-20,'Emma’s House',0xe8bbc5],[7,-20,'Sarah’s House',0xb0cbe3],[21,-20,'Shared House',0xc6d4a8],[-20,0,'Sunrise Bakery',0xe8b37e],[-7,0,'Willowbrook Park',0x78b883],[7,0,'Petal & Stem',0xd5abc8],[21,0,'Corner Café',0xc9a991],[7,20,'Town Hall',0xa8b8dc]];
-function tree(x, z, scale = 1) { const t = new THREE.Mesh(new THREE.CylinderGeometry(.2, .3, 2, 7), trunk); t.position.set(x, 1, z); scene.add(t); const l = new THREE.Mesh(new THREE.IcosahedronGeometry(1.7 * scale, 1), leaf); l.position.set(x, 2.8, z); l.castShadow = true; scene.add(l); }
-sites.forEach(([x, z, name, col], i) => { if (i === 5) { cube(9, .13, 9, 0x75ad66, x, .06, z, false); for (const [dx, dz] of [[-3,-3],[3,-3],[-3,3],[3,3]]) tree(x + dx, z + dz, .8); return; } cube(7, 3.2, 6, col, x, 1.6, z); const roof = new THREE.Mesh(new THREE.ConeGeometry(5.4, 2, 4), mat(i === 4 ? 0xc36d56 : 0xa9655b)); roof.rotation.y = Math.PI / 4; roof.position.set(x, 4.2, z); roof.castShadow = true; scene.add(roof); cube(1.2, 2, .1, 0x785848, x, 1.05, z + 3.07); for (const dx of [-2.2, 2.2]) cube(1.2, 1.15, .12, 0xf9e0a0, x + dx, 2, z + 3.08); });
-for (let i = 0; i < 46; i++) { let x = Math.sin(i * 17) * 29, z = Math.cos(i * 11) * 29; if (Math.abs(x) < 24 && Math.abs(z) < 24) continue; tree(x, z, .65 + Math.random() * .5); }
+const world = buildWorld(scene, sites, { shadows: settings.shadows, skyEl: $('scene'), shadowMapSize: 2048 });
+const sun = world.sun;
 
 /* ================= Residents (unchanged) ================= */
 const data = [['Oliver','Baker',0x4e839a,-20,-20],['Emma','Florist',0xdb7993,-7,-20],['Sarah','Journalist',0x866eb1,7,-20],['Marcus','Mayor',0x627d65,7,20],['Mia','Café owner',0xde9b5b,21,0],['Noah','Mechanic',0x5677b2,21,-20],['Lily','Artist',0xa96d97,-7,0],['Ethan','Job seeker',0x9d854d,7,0]];
@@ -305,13 +301,9 @@ let vel = { theta: 0, phi: 0 };   // fling inertia (rad/s)
 let atHome = true;                // camera is at the fitted home view
 const view = { offX: 0, offY: 0 };
 
-// Points describing the town's buildings and park, used to fit the camera.
+// Points describing the town's buildings and park (from the built scenery), used to fit the camera.
 const fitPoints = [];
-sites.forEach(([x, z], i) => {
-  if (i === 5) { for (const sx of [-1, 1]) for (const sz of [-1, 1]) fitPoints.push(new V3(x + sx * 4.6, 0, z + sz * 4.6), new V3(x + sx * 4.4, 4.2, z + sz * 4.4)); return; }
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) fitPoints.push(new V3(x + sx * 3.5, 0, z + sz * 3.1), new V3(x + sx * 3.9, 3.2, z + sz * 3.9));
-  fitPoints.push(new V3(x, 5.2, z));
-});
+for (const b of world.fitBoxes) for (const x of [b.min.x, b.max.x]) for (const y of [Math.max(0, b.min.y), b.max.y]) for (const z of [b.min.z, b.max.z]) fitPoints.push(new V3(x, y, z));
 
 function safeInsets() { const s = getComputedStyle($('safeProbe')); return { top: parseFloat(s.paddingTop) || 0, right: parseFloat(s.paddingRight) || 0, bottom: parseFloat(s.paddingBottom) || 0, left: parseFloat(s.paddingLeft) || 0 }; }
 // Screen area not covered by HUD, in CSS px.
@@ -421,7 +413,7 @@ canvas.addEventListener('pointerdown', e => {
   if (pointers.size >= 2) return;
   try { canvas.setPointerCapture(e.pointerId); } catch {}
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-  if (pointers.size === 1) { g.mode = (e.button === 2 || e.shiftKey) ? 'pan' : 'orbit'; g.moved = 0; g.multi = false; g.t0 = performance.now(); g.lastT = g.t0; vel.theta = vel.phi = 0; }
+  if (pointers.size === 1) { g.mode = (e.button === 2 || e.shiftKey) ? 'pan' : 'orbit'; g.moved = 0; g.multi = false; g.t0 = e.timeStamp; g.lastT = g.t0; vel.theta = vel.phi = 0; }
   else beginPinch();
 });
 canvas.addEventListener('pointermove', e => {
@@ -437,7 +429,7 @@ canvas.addEventListener('pointermove', e => {
   if (g.moved < TAP_SLOP) return;
   if (g.mode === 'pan') { panBy(dx, dy); return; }
   if (g.mode === 'orbit') {
-    const s = ROT * settings.sensitivity, now = performance.now(), dt = Math.max(1, now - g.lastT) / 1000; g.lastT = now;
+    const s = ROT * settings.sensitivity, now = e.timeStamp, dt = Math.max(1, now - g.lastT) / 1000; g.lastT = now; // event time, not handler time
     want.theta -= dx * s; want.phi = clamp(want.phi - dy * s, LIMITS.phiMin, LIMITS.phiMax);
     // smoothed velocity for fling
     vel.theta = vel.theta * .6 + (-dx * s / dt) * .4; vel.phi = vel.phi * .6 + (-dy * s / dt) * .4;
@@ -447,10 +439,10 @@ canvas.addEventListener('pointermove', e => {
 function endPointer(e, cancelled) {
   if (!pointers.has(e.pointerId)) return;
   pointers.delete(e.pointerId);
-  const now = performance.now();
+  const now = e.timeStamp; // when the finger lifted, even if a slow frame delayed this handler
   if (pointers.size === 1) { g.mode = 'orbit'; g.moved = 0; g.lastT = now; vel.theta = vel.phi = 0; return; } // pinch -> one finger: rebase, no jump
   if (pointers.size === 0) {
-    const tap = !cancelled && !g.multi && g.moved < TAP_SLOP && now - g.t0 < 600 && g.mode !== 'pan';
+    const tap = !cancelled && !g.multi && g.moved < TAP_SLOP && g.mode !== 'pan'; // a press that never moved, even a slow one
     if (tap) { vel.theta = vel.phi = 0; pick(e.clientX, e.clientY); }
     else if (g.mode !== 'orbit' || now - g.lastT > 90 || g.multi) { vel.theta = vel.phi = 0; } // only fling on a fresh release
     vel.theta = clamp(vel.theta, -4, 4); vel.phi = clamp(vel.phi, -3, 3);
@@ -611,15 +603,15 @@ function frame(t) {
   if (started && !paused && !settingsOpen) { acc += delta * speed; while (acc > .12) { step(.12); acc -= .12; } }
   if (!started) want.theta += delta * .05; // gentle idle orbit behind the title screen
   updateCamera(delta);
-  sun.position.set(Math.cos(minutes / 1440 * Math.PI * 2) * 30, 10 + Math.sin(minutes / 1440 * Math.PI * 2) * 26, 12);
-  sun.intensity = minutes < 360 || minutes > 1200 ? .55 : 2.1;
-  scene.background.set(minutes < 360 || minutes > 1200 ? 0x273b57 : 0xb4def0);
+  world.update(delta, t / 1000, minutes);
   const c = 'Day ' + day + ' · ' + fmtTime(minutes); if (c !== lastClock) { $('clock').textContent = c; lastClock = c; }
-  ring.visible = !!selected; if (selected) { ring.position.set(selected.g.position.x, .08, selected.g.position.z); ring.material.opacity = .65 + Math.sin(t / 250) * .25; }
+  ring.visible = !!selected; if (selected) { ring.position.set(selected.g.position.x, .17, selected.g.position.z); ring.material.opacity = .65 + Math.sin(t / 250) * .25; }
   if (selected && (sheetTick += delta) > .4) { sheetTick = 0; updateSheet(false); }
   if (started && settings.autosave && (autosaveTick += delta) > 120) { autosaveTick = 0; save(true); }
   renderer.render(scene, camera);
+  lastRenderInfo.calls = renderer.info.render.calls; lastRenderInfo.triangles = renderer.info.render.triangles;
 }
+const lastRenderInfo = { calls: 0, triangles: 0 };
 let resizeQueued = false;
 function onResize() {
   if (resizeQueued) return; resizeQueued = true;
@@ -649,6 +641,8 @@ window.__tlw = {
   residents: () => residents.map(r => ({ name: r.name, x: r.g.position.x, z: r.g.position.z, energy: r.energy, hunger: r.hunger, social: r.social })),
   screenOf(i) { const r = residents[i]; _p.set(r.g.position.x, 1.3, r.g.position.z).project(camera); return { x: (_p.x + 1) / 2 * innerWidth, y: (1 - _p.y) / 2 * innerHeight }; },
   townBounds() { return projectedBounds(); }, usableRect: () => usableRect(false), settings,
+  world: world.stats, sites: sites.map(s => s.slice(0, 3)), renderInfo: () => ({ ...lastRenderInfo }), worldState: world.state,
+  debug: { setMinutes(m) { minutes = m; } }, // test hook: jump the clock (e.g. to check night lighting)
 };
 </script>
 </body>

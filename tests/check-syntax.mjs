@@ -9,4 +9,7 @@ new vm.SourceTextModule(m[1], { identifier: 'index.html#module' }); // throws on
 const v = html.match(/const GAME_VERSION = '([^']+)'/)?.[1];
 if (v !== pkg.version) throw new Error(`GAME_VERSION ${v} != package.json ${pkg.version}`);
 for (const id of ['btnContinue', 'btnNew', 'btnSettings', 'resetCam', 'sheet', 'settings']) if (!html.includes(`id="${id}"`)) throw new Error('missing #' + id);
-console.log(`  ✓ index.html module parses; version ${v}`);
+const worldSrc = fs.readFileSync(path.join(root, 'src/world.js'), 'utf8');
+new vm.SourceTextModule(worldSrc, { identifier: 'src/world.js' });
+if (!html.includes("from './src/world.js'")) throw new Error('index.html does not import src/world.js');
+console.log(`  ✓ index.html and src/world.js parse; version ${v}`);

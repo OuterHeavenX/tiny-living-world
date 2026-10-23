@@ -20,7 +20,10 @@ const near = (a, b, eps) => Math.abs(a - b) <= eps;
 
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 
-async function open(device = devices['iPhone 13'], { storage = null, css = null } = {}) {
+// Functional tests run with shadows off (a supported Settings option) so software GL stays fast;
+// scene/performance/visual tests pass { shadows: true } to exercise the default look.
+async function open(device = devices['iPhone 13'], { storage = null, css = null, shadows = false } = {}) {
+  storage = { 'tlw-settings': JSON.stringify({ shadows }), ...(storage || {}) };
   const ctx = await browser.newContext({ ...device }); openContexts.add(ctx);
   const page = await ctx.newPage();
   page.errors = [];
@@ -28,7 +31,7 @@ async function open(device = devices['iPhone 13'], { storage = null, css = null 
   page.on('console', m => { if (m.type() === 'error') page.errors.push(m.text()); });
   if (fs.existsSync(path.join(THREE_DIR, 'three.module.js'))) // serve three.js locally when available (offline / deterministic)
     await page.route(THREE_URL + '*', r => r.fulfill({ path: path.join(THREE_DIR, path.basename(new URL(r.request().url()).pathname)), contentType: 'text/javascript' }));
-  await page.route(ORIGIN + '**', r => r.fulfill({ path: path.join(ROOT, 'index.html'), contentType: 'text/html' }));
+  await page.route(ORIGIN + '**', r => { const pn = new URL(r.request().url()).pathname; const file = path.join(ROOT, pn === '/' ? 'index.html' : pn); r.fulfill({ path: file, contentType: file.endsWith('.js') ? 'text/javascript' : 'text/html' }); });
   if (storage) await page.addInitScript(s => { if (!sessionStorage.getItem('seeded')) { for (const [k, v] of Object.entries(s)) localStorage.setItem(k, v); sessionStorage.setItem('seeded', '1'); } }, storage);
   if (css) await page.addInitScript(c => document.addEventListener('DOMContentLoaded', () => { const st = document.createElement('style'); st.textContent = c; document.head.append(st); }), css);
   await page.goto(ORIGIN);
@@ -95,11 +98,11 @@ await test('boots without errors; welcome screen shows v0.2.0; no save -> Contin
 });
 
 await test('New Game starts the simulation and shows the compact HUD', async () => {
-  const p = await open();
+  const p = await open(devices['iPhone 13'], { shadows: true });
   await startNew(p);
   ok(!(await p.isVisible('#welcome')), 'welcome hidden');
-  const m0 = await tlw(p, '__tlw.state.minutes'); await p.waitForTimeout(1200);
-  ok(await tlw(p, '__tlw.state.minutes') > m0, 'clock should advance');
+  const m0 = await tlw(p, '__tlw.state.minutes');
+  ok(await p.waitForFunction(m => __tlw.state.minutes > m + .2, m0, { timeout: 10000 }).then(() => true, () => false), 'clock should advance');
   ok(/Day 1 · 08:0\d/.test(await p.textContent('#clock')), 'clock text');
   // HUD footprint at rest (v0.1 measured 15.7% of an iPhone 13 screen)
   const frac = await p.evaluate(() => ['clockPill', 'ctrlPill', 'dock'].reduce((a, id) => { const r = document.getElementById(id).getBoundingClientRect(); return a + r.width * r.height; }, 0) / (innerWidth * innerHeight));
@@ -316,7 +319,7 @@ await test('New Game over an existing save asks first; Cancel keeps it, OK start
 });
 
 await test('settings persist; in-game menu can save, return to title, and delete the save', async () => {
-  const p = await open(); await startNew(p);
+  const p = await open(devices['iPhone 13'], { shadows: true }); await startNew(p);
   await p.tap('#menu'); ok(await p.isVisible('#settings'), 'menu opens settings');
   const m0 = await tlw(p, '__tlw.state.minutes'); await p.waitForTimeout(600);
   ok(await tlw(p, '__tlw.state.minutes') === m0, 'sim pauses while settings are open');
@@ -358,11 +361,55 @@ await test('desktop: mouse drag orbits, wheel zooms, click selects', async () =>
 await test('rotating the phone re-frames the town', async () => {
   const p = await open(); await startNew(p); await settle(p);
   const h0 = await tlw(p, '__tlw.home.theta');
-  await p.setViewportSize({ width: 750, height: 342 }); await settle(p, 1600);
+  await p.setViewportSize({ width: 750, height: 342 });
+  await p.waitForFunction(h => __tlw.home.theta !== h, h0, { timeout: 15000 }).catch(() => {}); await settle(p, 1600);
   ok(await tlw(p, '__tlw.home.theta') !== h0, 'landscape home view chosen');
   const { b, r } = await tlw(p, '{ b: __tlw.townBounds(), r: __tlw.usableRect() }');
   ok(b.minX >= r.left - 2 && b.maxX <= r.right + 2 && b.minY >= r.top - 2 && b.maxY <= r.bottom + 2, 'town fits after rotation');
   if (SHOTS) await p.screenshot({ path: path.join(SHOTS, 'game-landscape.png') });
+  await p.context().close();
+});
+
+await test('Willowbrook diorama: all locations rebuilt in place, layout and destinations unchanged', async () => {
+  const p = await open(devices['iPhone 13'], { shadows: true }); await startNew(p);
+  const ORIGINAL = [[-20,-20,'Oliver’s Cottage'],[-7,-20,'Emma’s House'],[7,-20,'Sarah’s House'],[21,-20,'Shared House'],[-20,0,'Sunrise Bakery'],[-7,0,'Willowbrook Park'],[7,0,'Petal & Stem'],[21,0,'Corner Café'],[7,20,'Town Hall']];
+  ok(JSON.stringify(await tlw(p, '__tlw.sites')) === JSON.stringify(ORIGINAL), 'simulation destinations changed');
+  const w = await tlw(p, '__tlw.world');
+  ok(w.sites.length === 9, 'all 9 locations built');
+  for (const s of w.sites) {
+    const [x0, y0, z0] = s.min, [x1, y1, z1] = s.max;
+    ok(s.x > x0 && s.x < x1 && s.z > z0 && s.z < z1, s.name + ' not built around its original position');
+    ok(y1 > (s.name === 'Willowbrook Park' ? 2.5 : 5), s.name + ' looks too flat (' + y1.toFixed(1) + ')');
+    ok(x1 - x0 < 22 && z1 - z0 < 22, s.name + ' spills outside its block');
+  }
+  ok((await tlw(p, '__tlw.world.sites.find(s => s.name === "Town Hall").max[1]')) > 11, 'town hall clock tower + flag');
+  ok(p.errors.length === 0, 'console errors: ' + p.errors.join(' | '));
+  await p.context().close();
+});
+
+await test('scene stays within a mobile budget (draw calls, triangles, build time)', async () => {
+  const p = await open(devices['iPhone 13'], { shadows: true }); await startNew(p); await p.waitForTimeout(500);
+  const info = await tlw(p, '__tlw.renderInfo()'), w = await tlw(p, '__tlw.world');
+  ok(info.calls > 0 && info.calls <= 60, 'draw calls per frame: ' + info.calls);
+  ok(info.triangles < 250000, 'triangles per frame: ' + info.triangles);
+  ok(w.buildMs < 3000, 'world build took ' + w.buildMs + 'ms');
+  results.push(`      (${info.calls} draw calls, ${Math.round(info.triangles / 1000)}k triangles, built in ${w.buildMs}ms under software GL)`);
+  await p.context().close();
+});
+
+await test('ambient animation runs (even when paused) and day/night lighting changes', async () => {
+  const p = await open(devices['iPhone 13'], { shadows: true }); await startNew(p); await p.tap('#pause');
+  const t0 = await tlw(p, '__tlw.worldState.t'), m0 = await tlw(p, '__tlw.state.minutes');
+  ok(await p.waitForFunction(t => __tlw.worldState.t > t + .3, t0, { timeout: 15000 }).then(() => true, () => false), 'ambient time should advance while the simulation is paused');
+  ok(await tlw(p, '__tlw.state.minutes') === m0, 'simulation clock must stay paused');
+  await p.evaluate(() => __tlw.debug.setMinutes(600)); await p.waitForFunction(() => __tlw.worldState.daylight > .95, null, { timeout: 15000 }).catch(() => {}); await p.waitForTimeout(300);
+  const day = await tlw(p, '{ n: __tlw.worldState.night, d: __tlw.worldState.daylight, sky: getComputedStyle(document.getElementById("scene")).backgroundImage }');
+  await p.evaluate(() => __tlw.debug.setMinutes(1320)); await p.waitForFunction(() => __tlw.worldState.night > .95, null, { timeout: 15000 }).catch(() => {}); await p.waitForTimeout(300);
+  const night = await tlw(p, '{ n: __tlw.worldState.night, d: __tlw.worldState.daylight, sky: getComputedStyle(document.getElementById("scene")).backgroundImage }');
+  ok(day.n < .05 && day.d > .95, 'midday should be full daylight');
+  ok(night.n > .95 && night.d < .05, 'late evening should be night (windows and lamps glow)');
+  ok(day.sky !== night.sky && night.sky.includes('gradient'), 'sky gradient should change with time');
+  if (SHOTS) await p.screenshot({ path: path.join(SHOTS, 'night-portrait.png') });
   await p.context().close();
 });
 
