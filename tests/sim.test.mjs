@@ -133,6 +133,20 @@ test('construction: work pauses when money runs out and resumes when funded', ()
   assert.equal(pr.status, 'active'); assert.ok(S.s.events.some(e => e.type === 'project.resumed'));
 });
 
+test('zoning & permits: a duplicate the town can’t support is refused; a needed new kind is approved', () => {
+  const S = Society.create(22); S.setTime(2, 8 * 60);
+  const plot = S.s.plots.P011; S.completeSale(plot, 'R6', 0, []);
+  const dup = S.startProject(plot, 'construction', { kind: 'florist', category: 'florist' });
+  let guard = 0; while (dup.status === 'active' && dup.phase < 2 && guard++ < 200) S.advance(60);
+  assert.equal(dup.status, 'denied', 'a second florist in a town this size is refused (support ' + S.permitSupport(dup).toFixed(2) + ')');
+  assert.ok(S.s.events.some(e => e.type === 'project.denied'));
+  assert.equal(plot.project, null);
+  const ok = S.startProject(plot, 'construction', { kind: 'repair', category: 'repair' });
+  guard = 0; while (ok.status === 'active' && ok.phase < 2 && guard++ < 200) S.advance(60);
+  assert.notEqual(ok.status, 'denied'); assert.ok(ok.phase >= 2, 'repair shop permit approved');
+  assert.ok(S.permitSupport({ plot: 'P007', owner: 'R2', target: { kind: 'house' } }) === 0, 'no houses on commercial-only land');
+});
+
 /* ---------------- residents ---------------- */
 test('residents: full data model and explainable decisions', () => {
   const S = run(Society.create(12), 3);

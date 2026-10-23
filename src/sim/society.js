@@ -769,7 +769,7 @@ export class Society {
   permitDecisions() {
     for (const pr of Object.values(this.s.projects)) {
       if (pr.status !== 'active' || !PHASES[pr.type][pr.phase].permit) continue;
-      const support = this.permitSupport(pr);
+      const support = pr.source === 'sandbox' ? 1 : this.permitSupport(pr); // sandbox projects skip the permit vote
       if (support >= .5) { this.record('project.permit', { who: [pr.owner, 'R4'], plot: pr.plot, text: `Town Hall approved the permit for ${pr.title}.`, imp: 3, cause: `support ${Math.round(support * 100)}%` }); this.nextPhase(pr); }
       else {
         pr.status = 'denied'; pr.blocker = 'Permit denied';
@@ -1156,8 +1156,10 @@ export class Society {
     const s = this.s; if (s.town.mode !== 'sandbox') return { ok: false, message: 'Sandbox mode is off.' };
     const plot = a.plot && s.plots[a.plot]; let message = '';
     const developable = pl => pl && !pl.zoning.includes('park') && !pl.zoning.includes('civic') && !(pl.zoning.includes('residential') && !pl.zoning.includes('commercial'));
+    const isHome = pl => pl && Object.values(s.people).some(q => q.home === pl.id);
     if (action === 'demolish') {
       if (!developable(plot) || !plot.building || plot.project) return { ok: false, message: 'Only shops and empty land without an active project can be demolished.' };
+      if (isHome(plot)) return { ok: false, message: 'Someone lives here — it can be renovated, but not knocked down.' };
       const biz = plot.business && s.businesses[plot.business]; if (biz && this.isOperating(biz)) this.closeBusiness(biz, 'demolition ordered in sandbox');
       this.startProject(plot, 'demolition', { name: s.buildings[plot.building].name }, { source: 'sandbox' }); message = 'Demolition started.';
     } else if (action === 'build') {
