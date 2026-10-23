@@ -1,37 +1,655 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#172827"><title>Tiny Living World — Willowbrook</title>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#172827">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Willowbrook">
+<title>Tiny Living World — Willowbrook</title>
 <style>
-*{box-sizing:border-box}body{margin:0;background:#172827;color:#fff;font-family:system-ui,sans-serif;overflow:hidden}#scene{position:fixed;inset:0}#ui{position:fixed;inset:0;pointer-events:none}button{cursor:pointer;border:0;border-radius:10px;padding:10px 13px;background:#e8efd7;color:#223b34;font-weight:700;min-height:42px}button:focus-visible{outline:3px solid #77d3ef}.hud{position:absolute;pointer-events:auto;background:#182b2ad9;border:1px solid #ffffff35;border-radius:15px;padding:12px;backdrop-filter:blur(9px)}#top{left:calc(10px + env(safe-area-inset-left));top:calc(10px + env(safe-area-inset-top));right:calc(10px + env(safe-area-inset-right));display:flex;align-items:center;justify-content:space-between;gap:8px}#top small{display:block;opacity:.8}#controls{bottom:calc(12px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);display:flex;gap:6px;max-width:calc(100% - 20px)}#controls button{padding:8px;min-width:45px}#panel{right:12px;top:92px;width:min(310px,calc(100vw - 24px));max-height:calc(100dvh - 180px);overflow:auto}#feed{left:12px;bottom:90px;width:min(320px,calc(100vw - 24px));max-height:195px;overflow:auto;font-size:12px}#feed div{padding:5px 0;border-bottom:1px solid #ffffff1a}h3{margin:0 0 8px}#panel p{font-size:13px;line-height:1.5}#panel button{margin:3px}#hint{position:absolute;top:80px;left:12px;font-size:12px;text-shadow:0 1px 4px #000;opacity:.9}@media(max-width:650px){#panel{top:auto;bottom:86px;right:10px;width:min(290px,calc(100vw - 20px))}#feed{display:none}#hint{font-size:11px;max-width:200px}#top{font-size:13px}}
-</style></head><body><div id="scene"></div><div id="ui"><div id="top" class="hud"><div><strong>🌳 WILLOWBROOK</strong><small id="clock">Day 1 · 08:00</small></div><small id="status">8 residents living their lives</small></div><div id="hint">Drag to orbit · Pinch to zoom · Tap a resident</div><div id="feed" class="hud"><strong>Town happenings</strong><div id="events"></div></div><div id="panel" class="hud" hidden></div><div id="controls" class="hud"><button id="pause" aria-label="Pause">Ⅱ</button><button id="speed">1×</button><button id="people">People</button><button id="save">Save</button><button id="reset">Reset</button></div></div>
+:root{
+  --sat:env(safe-area-inset-top,0px);--sar:env(safe-area-inset-right,0px);
+  --sab:env(safe-area-inset-bottom,0px);--sal:env(safe-area-inset-left,0px);
+  --glass:rgba(21,39,38,.84);--line:rgba(255,255,255,.16);
+  --cream:#e8efd7;--ink:#223b34;--accent:#f2c46d;--muted:rgba(255,255,255,.72);
+  --edge:8px;
+}
+html{touch-action:manipulation;-webkit-text-size-adjust:100%;height:100%}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;height:100%;background:#172827;color:#fff;font:15px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden;overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#scene{position:fixed;inset:0}
+#scene canvas{display:block;touch-action:none}
+#safeProbe{position:fixed;inset:0;padding:var(--sat) var(--sar) var(--sab) var(--sal);visibility:hidden;pointer-events:none}
+
+button{font:inherit;cursor:pointer;border:0;border-radius:12px;background:var(--cream);color:var(--ink);font-weight:700;min-height:44px;min-width:44px;padding:0 12px;display:inline-flex;align-items:center;justify-content:center;gap:6px;touch-action:manipulation}
+button:focus-visible,input:focus-visible{outline:3px solid #77d3ef;outline-offset:2px}
+button:disabled{opacity:.45;cursor:default}
+button:active:not(:disabled){transform:scale(.96)}
+button.ghost{background:rgba(255,255,255,.1);color:#fff}
+button.primary{background:var(--accent);color:#2b2414}
+button.danger{background:rgba(214,96,82,.18);color:#ffb3a8;border:1px solid rgba(255,140,120,.35)}
+button svg{width:20px;height:20px;flex:none}
+.glass{background:var(--glass);border:1px solid var(--line);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+
+/* ---------- HUD ---------- */
+#hud{position:fixed;inset:0;pointer-events:none;transition:opacity .25s}
+#hud>*{pointer-events:auto}
+body.mode-title #hud{opacity:0;visibility:hidden}
+.pill{position:absolute;display:flex;align-items:center;gap:4px;border-radius:16px;padding:4px}
+#clockPill{top:calc(var(--sat) + var(--edge));left:calc(var(--sal) + var(--edge));padding:3px 12px 3px 12px;min-height:46px;flex-direction:column;align-items:flex-start;justify-content:center;gap:0;color:#fff;font:inherit;cursor:pointer}
+#clockPill small{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
+#clockPill small i{font-style:normal;display:inline-block;margin-left:4px;transition:transform .2s}
+#clockPill[aria-expanded="true"] small i{transform:rotate(180deg)}
+#clock{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums}
+#ctrlPill{top:calc(var(--sat) + var(--edge));right:calc(var(--sar) + var(--edge));padding:3px;gap:3px}
+#ctrlPill button{background:rgba(255,255,255,.1);color:#fff;padding:0 10px;font-variant-numeric:tabular-nums}
+#speed{min-width:48px}
+#dock{bottom:max(10px,calc(var(--sab) + 4px));left:50%;transform:translateX(-50%);transition:transform .25s,opacity .25s;padding:3px;gap:3px}
+#dock button{background:rgba(255,255,255,.1);color:#fff;font-size:13px;padding:0 11px;white-space:nowrap}
+#dock button svg{width:18px;height:18px}
+body.sheet-open #dock,body.sheet-open #ticker{opacity:0;pointer-events:none;transform:translateX(-50%) translateY(20px)}
+/* transient news chip: appears when something happens, then fades */
+#ticker{all:unset;box-sizing:border-box;position:absolute;left:50%;bottom:calc(max(10px,calc(var(--sab) + 4px)) + 58px);transform:translateX(-50%) translateY(8px);max-width:min(330px,calc(100vw - var(--sal) - var(--sar) - 24px));display:flex;align-items:center;gap:7px;padding:7px 12px;border-radius:14px;font-size:12.5px;opacity:0;pointer-events:none;transition:opacity .35s,transform .35s;background:var(--glass);border:1px solid var(--line);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);color:#fff;cursor:pointer}
+#ticker.show{opacity:1;transform:translateX(-50%);pointer-events:auto}
+#tickerText{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#feed{position:absolute;top:calc(var(--sat) + var(--edge) + 52px);left:calc(var(--sal) + var(--edge));width:min(320px,calc(100vw - var(--sal) - var(--sar) - 16px));border-radius:16px;padding:10px 12px;font-size:12.5px;opacity:0;visibility:hidden;transform:translateY(-6px);transition:opacity .2s,transform .2s,visibility 0s .2s}
+#feed.open{opacity:1;visibility:visible;transform:none;transition:opacity .2s,transform .2s}
+#feed strong{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+#events{max-height:min(220px,34dvh);overflow:auto;margin-top:4px;-webkit-user-select:text;user-select:text}
+#events div{padding:5px 0;border-top:1px solid rgba(255,255,255,.1)}
+#hint{position:absolute;top:calc(var(--sat) + var(--edge) + 58px);left:50%;transform:translateX(-50%);font-size:12.5px;padding:7px 12px;border-radius:12px;white-space:nowrap;opacity:0;transition:opacity .5s;pointer-events:none}
+#hint.show{opacity:1}
+#toast{position:absolute;top:calc(var(--sat) + var(--edge) + 58px);left:50%;transform:translateX(-50%) translateY(-6px);padding:8px 14px;border-radius:12px;font-size:13px;font-weight:700;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none}
+#toast.show{opacity:1;transform:translateX(-50%)}
+
+/* ---------- Resident bottom sheet ---------- */
+#sheet{position:absolute;left:0;right:0;bottom:0;margin:0 auto;width:min(560px,100%);border-radius:20px 20px 0 0;border-bottom:0;padding:4px calc(14px + var(--sar)) calc(12px + var(--sab)) calc(14px + var(--sal));transform:translateY(105%);visibility:hidden;transition:transform .28s cubic-bezier(.2,.8,.2,1),visibility 0s .28s}
+body.sheet-open #sheet{transform:translateY(0);visibility:visible;transition:transform .28s cubic-bezier(.2,.8,.2,1)}
+#sheet.dragging{transition:none}
+#grab{all:unset;display:block;width:100%;height:20px;cursor:grab;touch-action:none}
+#grab::after{content:"";display:block;margin:7px auto 0;width:38px;height:5px;border-radius:3px;background:rgba(255,255,255,.35)}
+.sheet-head{display:flex;align-items:center;gap:8px;touch-action:none}
+.sheet-head .who{flex:1;min-width:0}
+.sheet-head .who b{display:block;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sheet-head .who small{color:var(--muted);font-size:12.5px}
+.swatch{width:14px;height:14px;border-radius:50%;flex:none;box-shadow:0 0 0 2px rgba(255,255,255,.25)}
+.sheet-head button{padding:0 10px}
+#sFollow{font-size:13px}
+#sFollow[aria-pressed="true"]{background:var(--accent);color:#2b2414}
+#sNext,#sClose{background:rgba(255,255,255,.1);color:#fff}
+#sActivity{margin:8px 0 6px;font-size:13.5px}
+#sActivity span{color:var(--muted)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.stat{font-size:11.5px;color:var(--muted)}
+.stat div{display:flex;justify-content:space-between}
+.stat em{font-style:normal;color:#fff;font-weight:700;font-variant-numeric:tabular-nums}
+.bar{height:6px;border-radius:3px;background:rgba(255,255,255,.14);margin-top:4px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:3px;background:#9fd38a;transition:width .4s}
+.bar.low i{background:#f0a35e}
+#sMemory{margin:8px 0 0;font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#sMore{display:none;margin-top:8px;font-size:12.5px;max-height:30dvh;overflow:auto}
+#sheet.expanded #sMore{display:block}
+#sheet.expanded #sMemory{display:none}
+#sMore h4{margin:8px 0 4px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+#sMore ul{margin:0;padding-left:18px}
+#sMore li{padding:2px 0}
+
+/* ---------- Overlays ---------- */
+.overlay{position:fixed;inset:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;padding:calc(var(--sat) + 16px) calc(var(--sar) + 16px) max(16px,calc(var(--sab) + 8px)) calc(var(--sal) + 16px)}
+.overlay[hidden]{display:none}
+#welcome{background:linear-gradient(to bottom,rgba(23,40,39,0) 30%,rgba(23,40,39,.55) 58%,rgba(23,40,39,.92) 100%)}
+.card{width:min(380px,100%);border-radius:22px;padding:20px}
+#welcome .card{background:transparent;border:0;-webkit-backdrop-filter:none;backdrop-filter:none;padding:8px 4px;text-align:center}
+.brand{margin-bottom:14px;text-shadow:0 2px 12px rgba(0,0,0,.35)}
+.brand .kicker{font-size:12px;letter-spacing:.22em;text-transform:uppercase;font-weight:800;color:var(--accent)}
+.brand h1{margin:2px 0 4px;font-size:clamp(30px,9vw,40px);line-height:1.05;letter-spacing:-.01em}
+.brand p{margin:0;color:rgba(255,255,255,.85);font-size:14px}
+.stack{display:flex;flex-direction:column;gap:10px}
+.stack button{min-height:52px;font-size:16px;border-radius:14px}
+#saveInfo{margin:0 0 2px;font-size:12.5px;color:var(--muted);min-height:1em}
+.ver{margin:14px 0 0;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+#settings{background:rgba(10,20,20,.45);justify-content:flex-end}
+@media (min-height:560px) and (min-width:600px){#settings{justify-content:center}}
+#settings .card{max-height:100%;overflow:auto}
+#settings h2{margin:0;font-size:20px;flex:1}
+.set-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.08);font-size:14.5px}
+.row label{flex:1}
+.row small{display:block;color:var(--muted);font-size:12px}
+input[type=range]{width:46%;accent-color:var(--accent);height:32px}
+.switch{appearance:none;-webkit-appearance:none;width:50px;height:30px;border-radius:15px;background:rgba(255,255,255,.2);position:relative;flex:none;cursor:pointer;transition:background .2s;margin:0}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:transform .2s}
+.switch:checked{background:#6fbf73}
+.switch:checked::after{transform:translateX(20px)}
+#settings .stack{margin-top:14px}
+#settings .stack button{min-height:46px;font-size:15px}
+body:not(.in-game) .ingame-only{display:none}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media (orientation:landscape) and (max-height:500px){
+  #ticker{left:auto;right:calc(var(--sar) + var(--edge));bottom:max(10px,calc(var(--sab) + 4px));transform:translateY(8px);max-width:min(300px,36vw)}
+  #ticker.show{transform:none}
+  #dock{left:calc(var(--sal) + var(--edge));transform:none}
+  body.sheet-open #dock{transform:translateY(20px)}
+  .overlay#welcome{justify-content:center;align-items:flex-end;background:linear-gradient(to right,rgba(23,40,39,0) 35%,rgba(23,40,39,.9) 75%)}
+  .stack button{min-height:46px}
+  .brand{margin-bottom:8px}
+  #sMore{max-height:22dvh}
+}
+</style>
+</head>
+<body class="mode-title">
+<div id="scene"></div>
+<div id="safeProbe" aria-hidden="true"></div>
+
+<div id="hud">
+  <button id="clockPill" class="pill glass" aria-expanded="false" aria-controls="feed" aria-label="Town happenings"><small>Willowbrook<i aria-hidden="true">▾</i></small><span id="clock">Day 1 · 08:00</span></button>
+  <div id="feed" class="glass" aria-hidden="true"><strong>Town happenings</strong><div id="events"></div></div>
+  <div id="ctrlPill" class="pill glass">
+    <button id="pause" aria-label="Pause">Ⅱ</button>
+    <button id="speed" aria-label="Simulation speed">1×</button>
+    <button id="menu" aria-label="Menu and settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  </div>
+  <div id="hint" class="glass">Drag to orbit · Pinch to zoom · Tap a resident</div>
+  <div id="toast" class="glass" role="status"></div>
+  <button id="ticker" aria-label="Latest town news — open happenings" tabindex="-1"><span aria-hidden="true">📰</span><span id="tickerText"></span></button>
+  <div id="dock" class="pill glass">
+    <button id="people" aria-label="Show residents"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c.6-3.4 3-5.5 6-5.5s5.4 2.1 6 5.5"/><circle cx="17" cy="9" r="2.6"/><path d="M16.5 14.6c2.4.2 4.1 2 4.5 4.9"/></svg>People</button>
+    <button id="resetCam" aria-label="Reset camera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/></svg>Reset view</button>
+    <button id="save" aria-label="Save town"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg>Save</button>
+  </div>
+
+  <div id="sheet" class="glass" role="dialog" aria-label="Resident details" aria-hidden="true">
+    <button id="grab" aria-label="Expand or collapse details"></button>
+    <div class="sheet-head" id="sheetHead">
+      <span class="swatch" id="sSwatch"></span>
+      <div class="who"><b id="sName"></b><small id="sJob"></small></div>
+      <button id="sFollow" aria-pressed="false">Follow</button>
+      <button id="sNext" aria-label="Next resident">›</button>
+      <button id="sClose" aria-label="Close">✕</button>
+    </div>
+    <p id="sActivity"></p>
+    <div class="stats">
+      <div class="stat"><div>Energy<em id="sEnergyV"></em></div><div class="bar" id="sEnergyB"><i></i></div></div>
+      <div class="stat"><div>Fullness<em id="sHungerV"></em></div><div class="bar" id="sHungerB"><i></i></div></div>
+      <div class="stat"><div>Social<em id="sSocialV"></em></div><div class="bar" id="sSocialB"><i></i></div></div>
+    </div>
+    <p id="sMemory"></p>
+    <div id="sMore"><h4>Memories</h4><ul id="sMemList"></ul><h4>Friends</h4><ul id="sFriendList"></ul></div>
+  </div>
+</div>
+
+<div id="welcome" class="overlay">
+  <div class="card">
+    <div class="brand">
+      <div class="kicker">🌳 Willowbrook</div>
+      <h1>Tiny Living World</h1>
+      <p>A little town of eight residents, living their lives.</p>
+    </div>
+    <div class="stack">
+      <p id="saveInfo"></p>
+      <button id="btnContinue" class="primary">Continue</button>
+      <button id="btnNew">New Game</button>
+      <button id="btnSettings" class="ghost">Settings</button>
+    </div>
+    <p class="ver" id="verWelcome">v0.2.0</p>
+  </div>
+</div>
+
+<div id="settings" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="setTitle">
+  <div class="card glass">
+    <div class="set-head"><h2 id="setTitle">Settings</h2><button id="setClose" class="ghost" aria-label="Close settings">✕</button></div>
+    <div class="row"><label for="optSens">Camera sensitivity<small>How fast dragging rotates the view</small></label><input id="optSens" type="range" min="0.5" max="2" step="0.1"></div>
+    <div class="row"><label for="optShadows">Shadows<small>Turn off for better battery life</small></label><input id="optShadows" class="switch" type="checkbox"></div>
+    <div class="row"><label for="optAutosave">Autosave<small>Every 2 minutes and when you leave</small></label><input id="optAutosave" class="switch" type="checkbox"></div>
+    <div class="row"><label for="optHints">Gesture hints<small>Show controls tip when play starts</small></label><input id="optHints" class="switch" type="checkbox"></div>
+    <div class="stack">
+      <button id="setSave" class="ingame-only">Save town now</button>
+      <button id="setTitleBtn" class="ghost ingame-only">Return to title screen</button>
+      <button id="setDelete" class="danger">Delete saved town</button>
+    </div>
+    <p class="ver" id="verSettings">Tiny Living World v0.2.0</p>
+  </div>
+</div>
+
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
-const $=id=>document.getElementById(id), scene=new THREE.Scene();scene.background=new THREE.Color(0xb4def0);
-const camera=new THREE.PerspectiveCamera(48,innerWidth/innerHeight,.1,500),renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
-renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,1.7));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;$('scene').appendChild(renderer.domElement);
-scene.add(new THREE.HemisphereLight(0xfff8dc,0x637b69,2));let sun=new THREE.DirectionalLight(0xfff3cf,2.1);sun.position.set(-18,35,13);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);sun.shadow.camera.left=-38;sun.shadow.camera.right=38;sun.shadow.camera.top=38;sun.shadow.camera.bottom=-38;scene.add(sun);
-const mat=(c)=>new THREE.MeshStandardMaterial({color:c,roughness:.92});const grass=mat(0x91b978),road=mat(0xe5d4b4),trunk=mat(0x9a6a4a),leaf=mat(0x4e9870),skin=mat(0xffcfad);
-function cube(w,h,d,c,x,y,z,shadow=true){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),typeof c==='number'?mat(c):c);m.position.set(x,y,z);m.castShadow=shadow;m.receiveShadow=true;scene.add(m);return m}
-cube(64,.45,64,grass,0,-.35,0,false);
-for(const z of [-10,8])cube(62,.06,3.2,road,0,.01,z,false);
-for(const x of [-13,0,13])cube(3,.06,58,road,x,.02,0,false);
-const sites=[[-20,-20,'Oliver’s Cottage',0xbad2ab],[-7,-20,'Emma’s House',0xe8bbc5],[7,-20,'Sarah’s House',0xb0cbe3],[21,-20,'Shared House',0xc6d4a8],[-20,0,'Sunrise Bakery',0xe8b37e],[-7,0,'Willowbrook Park',0x78b883],[7,0,'Petal & Stem',0xd5abc8],[21,0,'Corner Café',0xc9a991],[7,20,'Town Hall',0xa8b8dc]];
-function tree(x,z,scale=1){const t=new THREE.Mesh(new THREE.CylinderGeometry(.2,.3,2,7),trunk);t.position.set(x,1,z);scene.add(t);const l=new THREE.Mesh(new THREE.IcosahedronGeometry(1.7*scale,1),leaf);l.position.set(x,2.8,z);l.castShadow=true;scene.add(l)}
-sites.forEach(([x,z,name,col],i)=>{if(i===5){cube(9,.13,9,0x75ad66,x,.06,z,false);for(const [dx,dz] of [[-3,-3],[3,-3],[-3,3],[3,3]])tree(x+dx,z+dz,.8);return}cube(7,3.2,6,col,x,1.6,z);const roof=new THREE.Mesh(new THREE.ConeGeometry(5.4,2,4),mat(i===4?0xc36d56:0xa9655b));roof.rotation.y=Math.PI/4;roof.position.set(x,4.2,z);roof.castShadow=true;scene.add(roof);cube(1.2,2,.1,0x785848,x,1.05,z+3.07);for(const dx of [-2.2,2.2])cube(1.2,1.15,.12,0xf9e0a0,x+dx,2,z+3.08);});
-for(let i=0;i<46;i++){let x=Math.sin(i*17)*29,z=Math.cos(i*11)*29;if(Math.abs(x)<24&&Math.abs(z)<24)continue;tree(x,z,.65+Math.random()*.5)}
-const data=[['Oliver','Baker',0x4e839a,-20,-20],['Emma','Florist',0xdb7993,-7,-20],['Sarah','Journalist',0x866eb1,7,-20],['Marcus','Mayor',0x627d65,7,20],['Mia','Café owner',0xde9b5b,21,0],['Noah','Mechanic',0x5677b2,21,-20],['Lily','Artist',0xa96d97,-7,0],['Ethan','Job seeker',0x9d854d,7,0]];
-const residents=data.map(([name,job,color,x,z],i)=>{let g=new THREE.Group(),body=new THREE.Mesh(new THREE.CylinderGeometry(.45,.5,1.15,8),mat(color)),head=new THREE.Mesh(new THREE.SphereGeometry(.45,12,10),skin);body.position.y=.93;head.position.y=1.8;g.add(body,head);scene.add(g);g.position.set(x,0,z);return {name,job,g,home:[x,z],dest:[x,z],energy:70+Math.random()*25,social:40+Math.random()*40,hunger:70+Math.random()*20,friendships:{},memories:[],state:'Starting the day',next:0,id:i};});
-const saved=(()=>{try{return JSON.parse(localStorage.getItem('tlw-save')||'null')}catch{return null}})();let minutes=saved?.minutes??480,day=saved?.day??1,speed=1,paused=false,selected=null,follow=false,events=saved?.events??['Welcome to Willowbrook!'];if(saved?.residents)saved.residents.forEach((v,i)=>{const r=residents[i];if(!r||v.name!==r.name)return;r.g.position.set(v.x,0,v.z);r.energy=v.energy;r.social=v.social;r.hunger=v.hunger;r.friendships=v.friendships||{};r.memories=v.memories||[];});
-function log(s){events.unshift('Day '+day+': '+s);events=events.slice(0,25);$('events').replaceChildren(...events.slice(0,8).map(t=>{let d=document.createElement('div');d.textContent=t;return d}));}
-events.slice().reverse().forEach(()=>{});$('events').replaceChildren(...events.slice(0,8).map(t=>{let d=document.createElement('div');d.textContent=t;return d}));
-let theta=.75,phi=.86,dist=54,target=new THREE.Vector3(0,0,0);function placeCamera(){camera.position.set(target.x+dist*Math.sin(phi)*Math.sin(theta),dist*Math.cos(phi)+target.y,target.z+dist*Math.sin(phi)*Math.cos(theta));camera.lookAt(target)}placeCamera();
-const canvas=renderer.domElement;let pointers=new Map(),lastPinch=0,moved=0;canvas.style.touchAction='none';canvas.addEventListener('pointerdown',e=>{canvas.setPointerCapture(e.pointerId);pointers.set(e.pointerId,[e.clientX,e.clientY]);moved=0});canvas.addEventListener('pointermove',e=>{if(!pointers.has(e.pointerId))return;let p=pointers.get(e.pointerId),dx=e.clientX-p[0],dy=e.clientY-p[1];moved+=Math.abs(dx)+Math.abs(dy);pointers.set(e.pointerId,[e.clientX,e.clientY]);if(pointers.size===1){theta-=dx*.007;phi=Math.max(.32,Math.min(1.35,phi-dy*.007));follow=false}else{let ps=[...pointers.values()],d=Math.hypot(ps[0][0]-ps[1][0],ps[0][1]-ps[1][1]);if(lastPinch)dist=Math.max(15,Math.min(95,dist*lastPinch/d));lastPinch=d}});canvas.addEventListener('pointerup',e=>{if(moved<7)pick(e.clientX,e.clientY);pointers.delete(e.pointerId);if(pointers.size<2)lastPinch=0});canvas.addEventListener('wheel',e=>{dist=Math.max(15,Math.min(95,dist+e.deltaY*.03))},{passive:true});
-function pick(x,y){let ray=new THREE.Raycaster(),v=new THREE.Vector2(x/innerWidth*2-1,-(y/innerHeight)*2+1);ray.setFromCamera(v,camera);let hits=ray.intersectObjects(residents.flatMap(r=>r.g.children));if(hits.length){selected=residents.find(r=>r.g.children.includes(hits[0].object));showResident()}}
-function showResident(){if(!selected)return;let r=selected,p=$('panel');p.hidden=false;p.replaceChildren();let h=document.createElement('h3');h.textContent=r.name+' · '+r.job;p.append(h);for(const line of ['Activity: '+r.state,'Energy: '+Math.round(r.energy)+'%','Fullness: '+Math.round(r.hunger)+'%','Social: '+Math.round(r.social)+'%','Memory: '+(r.memories[0]||'A fresh start')]){let el=document.createElement('p');el.textContent=line;p.append(el)}let f=document.createElement('button');f.textContent=follow?'Unfollow':'Follow';f.onclick=()=>{follow=!follow;showResident()};let c=document.createElement('button');c.textContent='Close';c.onclick=()=>{p.hidden=true;selected=null;follow=false};p.append(f,c)}
+
+const GAME_VERSION = '0.2.0';
+const SAVE_KEY = 'tlw-save';          // unchanged from v0.1 so existing saves keep working
+const SETTINGS_KEY = 'tlw-settings';
+const $ = id => document.getElementById(id);
+const readJSON = k => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } };
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+/* ================= Settings ================= */
+const DEFAULT_SETTINGS = { sensitivity: 1, shadows: true, autosave: true, hints: true };
+const settings = { ...DEFAULT_SETTINGS, ...(readJSON(SETTINGS_KEY) || {}) };
+function writeSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch {} }
+
+/* ================= Scene (unchanged town) ================= */
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0xb4def0);
+const camera = new THREE.PerspectiveCamera(48, innerWidth / innerHeight, .1, 500);
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setSize(innerWidth, innerHeight); renderer.setPixelRatio(Math.min(devicePixelRatio, 1.7));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+$('scene').appendChild(renderer.domElement);
+scene.add(new THREE.HemisphereLight(0xfff8dc, 0x637b69, 2));
+const sun = new THREE.DirectionalLight(0xfff3cf, 2.1); sun.position.set(-18, 35, 13); sun.castShadow = settings.shadows;
+sun.shadow.mapSize.set(1024, 1024); sun.shadow.camera.left = -38; sun.shadow.camera.right = 38; sun.shadow.camera.top = 38; sun.shadow.camera.bottom = -38; scene.add(sun);
+const mat = c => new THREE.MeshStandardMaterial({ color: c, roughness: .92 });
+const grass = mat(0x91b978), road = mat(0xe5d4b4), trunk = mat(0x9a6a4a), leaf = mat(0x4e9870), skin = mat(0xffcfad);
+function cube(w, h, d, c, x, y, z, shadow = true) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), typeof c === 'number' ? mat(c) : c); m.position.set(x, y, z); m.castShadow = shadow; m.receiveShadow = true; scene.add(m); return m; }
+cube(64, .45, 64, grass, 0, -.35, 0, false);
+for (const z of [-10, 8]) cube(62, .06, 3.2, road, 0, .01, z, false);
+for (const x of [-13, 0, 13]) cube(3, .06, 58, road, x, .02, 0, false);
+const sites = [[-20,-20,'Oliver’s Cottage',0xbad2ab],[-7,-20,'Emma’s House',0xe8bbc5],[7,-20,'Sarah’s House',0xb0cbe3],[21,-20,'Shared House',0xc6d4a8],[-20,0,'Sunrise Bakery',0xe8b37e],[-7,0,'Willowbrook Park',0x78b883],[7,0,'Petal & Stem',0xd5abc8],[21,0,'Corner Café',0xc9a991],[7,20,'Town Hall',0xa8b8dc]];
+function tree(x, z, scale = 1) { const t = new THREE.Mesh(new THREE.CylinderGeometry(.2, .3, 2, 7), trunk); t.position.set(x, 1, z); scene.add(t); const l = new THREE.Mesh(new THREE.IcosahedronGeometry(1.7 * scale, 1), leaf); l.position.set(x, 2.8, z); l.castShadow = true; scene.add(l); }
+sites.forEach(([x, z, name, col], i) => { if (i === 5) { cube(9, .13, 9, 0x75ad66, x, .06, z, false); for (const [dx, dz] of [[-3,-3],[3,-3],[-3,3],[3,3]]) tree(x + dx, z + dz, .8); return; } cube(7, 3.2, 6, col, x, 1.6, z); const roof = new THREE.Mesh(new THREE.ConeGeometry(5.4, 2, 4), mat(i === 4 ? 0xc36d56 : 0xa9655b)); roof.rotation.y = Math.PI / 4; roof.position.set(x, 4.2, z); roof.castShadow = true; scene.add(roof); cube(1.2, 2, .1, 0x785848, x, 1.05, z + 3.07); for (const dx of [-2.2, 2.2]) cube(1.2, 1.15, .12, 0xf9e0a0, x + dx, 2, z + 3.08); });
+for (let i = 0; i < 46; i++) { let x = Math.sin(i * 17) * 29, z = Math.cos(i * 11) * 29; if (Math.abs(x) < 24 && Math.abs(z) < 24) continue; tree(x, z, .65 + Math.random() * .5); }
+
+/* ================= Residents (unchanged) ================= */
+const data = [['Oliver','Baker',0x4e839a,-20,-20],['Emma','Florist',0xdb7993,-7,-20],['Sarah','Journalist',0x866eb1,7,-20],['Marcus','Mayor',0x627d65,7,20],['Mia','Café owner',0xde9b5b,21,0],['Noah','Mechanic',0x5677b2,21,-20],['Lily','Artist',0xa96d97,-7,0],['Ethan','Job seeker',0x9d854d,7,0]];
+const residents = data.map(([name, job, color, x, z], i) => { let g = new THREE.Group(), body = new THREE.Mesh(new THREE.CylinderGeometry(.45, .5, 1.15, 8), mat(color)), head = new THREE.Mesh(new THREE.SphereGeometry(.45, 12, 10), skin); body.position.y = .93; head.position.y = 1.8; g.add(body, head); scene.add(g); g.position.set(x, 0, z); return { name, job, color, g, home: [x, z], dest: [x, z], energy: 70 + Math.random() * 25, social: 40 + Math.random() * 40, hunger: 70 + Math.random() * 20, friendships: {}, memories: [], state: 'Starting the day', next: 0, id: i }; });
+
+// Selection ring (UI affordance only; resident models unchanged)
+const ring = new THREE.Mesh(new THREE.RingGeometry(.75, .95, 32), new THREE.MeshBasicMaterial({ color: 0xfff4c2, transparent: true, opacity: .9, depthWrite: false }));
+ring.rotation.x = -Math.PI / 2; ring.visible = false; scene.add(ring);
+
+/* ================= Simulation state + save/load ================= */
+let minutes = 480, day = 1, speed = 1, paused = false, selected = null, follow = false, events = ['Welcome to Willowbrook!'], lastSocial = 0;
+let started = false;        // simulation running (not on title)
+let sessionStarted = false; // player has entered the game this page session
+
+function applySave(saved) {
+  minutes = saved?.minutes ?? 480; day = saved?.day ?? 1; events = saved?.events ?? ['Welcome to Willowbrook!'];
+  if (saved?.residents) saved.residents.forEach((v, i) => { const r = residents[i]; if (!r || v.name !== r.name) return; r.g.position.set(v.x, 0, v.z); r.energy = v.energy; r.social = v.social; r.hunger = v.hunger; r.friendships = v.friendships || {}; r.memories = v.memories || []; });
+  renderEvents();
+}
+function resetWorld() {
+  minutes = 480; day = 1; events = ['Welcome to Willowbrook!']; lastSocial = 0;
+  for (const r of residents) { r.g.position.set(r.home[0], 0, r.home[1]); r.g.rotation.y = 0; r.dest = [...r.home]; r.energy = 70 + Math.random() * 25; r.social = 40 + Math.random() * 40; r.hunger = 70 + Math.random() * 20; r.friendships = {}; r.memories = []; r.state = 'Starting the day'; r.next = 0; }
+  closeSheet(); renderEvents();
+}
+function renderEvents() {
+  $('events').replaceChildren(...events.slice(0, 8).map(t => { const d = document.createElement('div'); d.textContent = t; return d; }));
+  $('tickerText').textContent = events[0] || '';
+}
+let tickerTimer = 0;
+function flashTicker() { if (!started || $('feed').classList.contains('open')) return; const t = $('ticker'); t.classList.add('show'); clearTimeout(tickerTimer); tickerTimer = setTimeout(() => t.classList.remove('show'), 5000); }
+function log(s) { events.unshift('Day ' + day + ': ' + s); events = events.slice(0, 25); renderEvents(); flashTicker(); }
+
 function goal(r){let hour=minutes/60;let opts=hour<7||hour>=22?[r.home]:hour<17?[[...r.home],sites[4].slice(0,2),sites[6].slice(0,2),sites[7].slice(0,2)]:sites.map(s=>s.slice(0,2));if(r.hunger<30)opts=[sites[7].slice(0,2)];r.dest=opts[Math.floor(Math.random()*opts.length)].slice();r.dest[0]+=(Math.random()-.5)*2;r.dest[1]+=(Math.random()-.5)*2;r.state=hour<7||hour>=22?'Going home':r.hunger<30?'Getting food':hour<17?'Working or running errands':'Out exploring';r.next=minutes+20+Math.random()*85}
-let lastSocial=0;function step(dt){let old=minutes;minutes+=dt;if(minutes>=1440){minutes-=1440;day++;log('A new day begins.');residents.forEach(r=>r.energy=Math.min(100,r.energy+30))}for(const r of residents){if(minutes>=r.next||minutes<old)goal(r);let dx=r.dest[0]-r.g.position.x,dz=r.dest[1]-r.g.position.z,len=Math.hypot(dx,dz);if(len>.25){let d=Math.min(len,dt*.5);r.g.position.x+=dx/len*d;r.g.position.z+=dz/len*d;r.g.rotation.y=Math.atan2(dx,dz)}r.hunger=Math.max(0,r.hunger-dt*.018);r.energy=Math.max(0,r.energy-dt*.012);if(r.state==='Getting food'&&len<1.5)r.hunger=Math.min(100,r.hunger+dt*.7)}if(Math.abs(minutes-lastSocial)>25){lastSocial=minutes;for(let i=0;i<residents.length;i++)for(let j=i+1;j<residents.length;j++){let a=residents[i],b=residents[j];if(a.g.position.distanceTo(b.g.position)<3&&Math.random()<.23){a.friendships[b.name]=(a.friendships[b.name]||0)+1;b.friendships[a.name]=(b.friendships[a.name]||0)+1;let m=a.name+' chatted with '+b.name;a.memories.unshift(m);b.memories.unshift(m);a.memories=a.memories.slice(0,6);b.memories=b.memories.slice(0,6);log(m);a.social=Math.min(100,a.social+8);b.social=Math.min(100,b.social+8)}}}}
-$('pause').onclick=()=>{paused=!paused;$('pause').textContent=paused?'▶':'Ⅱ'};$('speed').onclick=()=>{speed=speed===1?3:speed===3?10:1;$('speed').textContent=speed+'×'};$('people').onclick=()=>{selected=residents[selected?(selected.id+1)%residents.length:0];showResident()};$('save').onclick=save;
-function save(){localStorage.setItem('tlw-save',JSON.stringify({minutes,day,events,residents:residents.map(r=>({name:r.name,x:r.g.position.x,z:r.g.position.z,energy:r.energy,social:r.social,hunger:r.hunger,friendships:r.friendships,memories:r.memories}))}));log('Town saved to this browser.')}
-$('reset').onclick=()=>{if(confirm('Reset your saved Willowbrook town?')){localStorage.removeItem('tlw-save');location.reload()}};
-let last=performance.now(),acc=0;function frame(t){requestAnimationFrame(frame);let delta=Math.min((t-last)/1000,.1);last=t;if(!paused){acc+=delta*speed;while(acc>.12){step(.12);acc-=.12}}if(follow&&selected)target.lerp(selected.g.position,.06);else target.lerp(new THREE.Vector3(0,0,0),.012);placeCamera();sun.position.set(Math.cos(minutes/1440*Math.PI*2)*30,10+Math.sin(minutes/1440*Math.PI*2)*26,12);sun.intensity=minutes<360||minutes>1200?.55:2.1;scene.background.set(minutes<360||minutes>1200?0x273b57:0xb4def0);$('clock').textContent='Day '+day+' · '+String(Math.floor(minutes/60)).padStart(2,'0')+':'+String(Math.floor(minutes%60)).padStart(2,'0');if(selected&&t%900<17)showResident();renderer.render(scene,camera)}
-window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});document.addEventListener('visibilitychange',()=>{if(document.hidden)save()});requestAnimationFrame(frame);
-</script></body></html>
+function step(dt){let old=minutes;minutes+=dt;if(minutes>=1440){minutes-=1440;day++;log('A new day begins.');residents.forEach(r=>r.energy=Math.min(100,r.energy+30))}for(const r of residents){if(minutes>=r.next||minutes<old)goal(r);let dx=r.dest[0]-r.g.position.x,dz=r.dest[1]-r.g.position.z,len=Math.hypot(dx,dz);if(len>.25){let d=Math.min(len,dt*.5);r.g.position.x+=dx/len*d;r.g.position.z+=dz/len*d;r.g.rotation.y=Math.atan2(dx,dz)}r.hunger=Math.max(0,r.hunger-dt*.018);r.energy=Math.max(0,r.energy-dt*.012);if(r.state==='Getting food'&&len<1.5)r.hunger=Math.min(100,r.hunger+dt*.7)}if(Math.abs(minutes-lastSocial)>25){lastSocial=minutes;for(let i=0;i<residents.length;i++)for(let j=i+1;j<residents.length;j++){let a=residents[i],b=residents[j];if(a.g.position.distanceTo(b.g.position)<3&&Math.random()<.23){a.friendships[b.name]=(a.friendships[b.name]||0)+1;b.friendships[a.name]=(b.friendships[a.name]||0)+1;let m=a.name+' chatted with '+b.name;a.memories.unshift(m);b.memories.unshift(m);a.memories=a.memories.slice(0,6);b.memories=b.memories.slice(0,6);log(m);a.social=Math.min(100,a.social+8);b.social=Math.min(100,b.social+8)}}}}
+
+function save(quiet = false) {
+  const payload = { version: GAME_VERSION, savedAt: Date.now(), minutes, day, events, residents: residents.map(r => ({ name: r.name, x: r.g.position.x, z: r.g.position.z, energy: r.energy, social: r.social, hunger: r.hunger, friendships: r.friendships, memories: r.memories })) };
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(payload)); }
+  catch { toast('Couldn’t save — browser storage is unavailable'); return false; }
+  if (!quiet) { log('Town saved to this browser.'); toast('Town saved ✓'); }
+  return true;
+}
+applySave(readJSON(SAVE_KEY));
+
+/* ================= Camera ================= */
+const V3 = THREE.Vector3;
+const cam  = { theta: .75, phi: .86, dist: 54, target: new V3() };   // rendered (smoothed)
+const want = { theta: .75, phi: .86, dist: 54, target: new V3() };   // desired
+let home = { theta: .75, phi: .86, dist: 54, target: new V3() };
+const LIMITS = { phiMin: .32, phiMax: 1.3, distMin: 11, distMax: 100, pan: 30 };
+const SMOOTH = 12;                // higher = snappier
+let vel = { theta: 0, phi: 0 };   // fling inertia (rad/s)
+let atHome = true;                // camera is at the fitted home view
+const view = { offX: 0, offY: 0 };
+
+// Points describing the town's buildings and park, used to fit the camera.
+const fitPoints = [];
+sites.forEach(([x, z], i) => {
+  if (i === 5) { for (const sx of [-1, 1]) for (const sz of [-1, 1]) fitPoints.push(new V3(x + sx * 4.6, 0, z + sz * 4.6), new V3(x + sx * 4.4, 4.2, z + sz * 4.4)); return; }
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) fitPoints.push(new V3(x + sx * 3.5, 0, z + sz * 3.1), new V3(x + sx * 3.9, 3.2, z + sz * 3.9));
+  fitPoints.push(new V3(x, 5.2, z));
+});
+
+function safeInsets() { const s = getComputedStyle($('safeProbe')); return { top: parseFloat(s.paddingTop) || 0, right: parseFloat(s.paddingRight) || 0, bottom: parseFloat(s.paddingBottom) || 0, left: parseFloat(s.paddingLeft) || 0 }; }
+// Screen area not covered by HUD, in CSS px.
+function usableRect(includeSheet) {
+  const W = innerWidth, H = innerHeight, s = safeInsets(), pad = 10;
+  let top = s.top, bottom = H - s.bottom;
+  for (const id of ['clockPill', 'ctrlPill']) { const r = $(id).getBoundingClientRect(); if (r.height) top = Math.max(top, r.bottom); }
+  if (document.body.classList.contains('mode-title')) { // frame the town around the title card
+    const c = document.querySelector('#welcome .card').getBoundingClientRect();
+    let left = s.left, right = W - s.right;
+    if (c.height && c.top > H * .3) bottom = Math.min(bottom, c.top + 40); else if (c.width && c.left > W * .3) right = c.left;
+    return { left: left + pad, right: right - pad, top: s.top + pad, bottom: bottom - pad };
+  }
+  const sheetOpen = includeSheet && document.body.classList.contains('sheet-open');
+  if (W > H * 1.1 && !sheetOpen) { // landscape: HUD sits in the corners, the town's diamond can use the full height
+    return { left: s.left + pad, right: W - s.right - pad, top: s.top + pad + 6, bottom: H - s.bottom - pad };
+  }
+  const lows = [];
+  if (sheetOpen) lows.push($('sheet'));
+  else lows.push($('dock'));
+  for (const el of lows) { const r = el.getBoundingClientRect(); if (r.height && r.top > H * .35) bottom = Math.min(bottom, r.top); }
+  return { left: s.left + pad, right: W - s.right - pad, top: top + pad, bottom: bottom - pad };
+}
+function viewParams() { const portrait = innerHeight > innerWidth * 1.1; return portrait ? { fov: 58, theta: .32, phi: .6 } : { fov: 46, theta: .75, phi: .86 }; }
+
+function placeCamera(theta, phi, dist, target, offX, offY) {
+  camera.position.set(target.x + dist * Math.sin(phi) * Math.sin(theta), target.y + dist * Math.cos(phi), target.z + dist * Math.sin(phi) * Math.cos(theta));
+  camera.lookAt(target);
+  const W = innerWidth, H = innerHeight;
+  camera.setViewOffset(W, H, offX, offY, W, H);
+  camera.updateMatrixWorld();
+}
+function offsetsFor(rect) { return [innerWidth / 2 - (rect.left + rect.right) / 2, innerHeight / 2 - (rect.top + rect.bottom) / 2]; }
+const _p = new V3();
+function projectedBounds() {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const p of fitPoints) { _p.copy(p).project(camera); const x = (_p.x + 1) / 2 * innerWidth, y = (1 - _p.y) / 2 * innerHeight; minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
+  return { minX, minY, maxX, maxY };
+}
+const raycaster = new THREE.Raycaster(), groundPlane = new THREE.Plane(new V3(0, 1, 0), 0);
+function groundAt(px, py) { raycaster.setFromCamera(new THREE.Vector2(px / innerWidth * 2 - 1, -(py / innerHeight) * 2 + 1), camera); return raycaster.ray.intersectPlane(groundPlane, new V3()); }
+
+// Fit the whole town into the usable rect for the current screen.
+function computeHome() {
+  const p = viewParams(), rect = usableRect(false), [ox, oy] = offsetsFor(rect);
+  camera.fov = p.fov; camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  const t = new V3();
+  const fits = d => { placeCamera(p.theta, p.phi, d, t, ox, oy); const b = projectedBounds(); return b.minX >= rect.left && b.maxX <= rect.right && b.minY >= rect.top && b.maxY <= rect.bottom; };
+  const fitDist = () => { let lo = 8, hi = 400; for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (fits(m)) hi = m; else lo = m; } return hi; };
+  let dist = fitDist();
+  for (let it = 0; it < 5; it++) { // centre the town inside the usable rect
+    placeCamera(p.theta, p.phi, dist, t, ox, oy);
+    const b = projectedBounds(), g1 = groundAt((b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2), g0 = groundAt((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2);
+    if (!g1 || !g0) break; t.add(g1.sub(g0)); t.y = 0; dist = fitDist();
+  }
+  home = { theta: p.theta, phi: p.phi, dist, target: t };
+  LIMITS.distMax = Math.max(dist * 1.5, 60);
+  LIMITS.distMin = Math.min(11, dist * .5);
+}
+function nearestAngle(a, ref) { return a + Math.PI * 2 * Math.round((ref - a) / (Math.PI * 2)); }
+function resetCamera(snap = false) {
+  follow = false; syncFollowBtn(); vel.theta = vel.phi = 0;
+  want.theta = nearestAngle(home.theta, cam.theta); want.phi = home.phi; want.dist = home.dist; want.target.copy(home.target);
+  if (snap) { cam.theta = want.theta; cam.phi = want.phi; cam.dist = want.dist; cam.target.copy(want.target); const [ox, oy] = offsetsFor(usableRect(true)); view.offX = ox; view.offY = oy; }
+  atHome = true;
+}
+function clampWant() {
+  want.phi = clamp(want.phi, LIMITS.phiMin, LIMITS.phiMax);
+  want.dist = clamp(want.dist, LIMITS.distMin, LIMITS.distMax);
+  want.target.x = clamp(want.target.x, -LIMITS.pan, LIMITS.pan); want.target.z = clamp(want.target.z, -LIMITS.pan, LIMITS.pan); want.target.y = 0;
+}
+function updateCamera(dt) {
+  if (!(dt > 0)) return;
+  const pointerActive = pointers.size > 0;
+  if (!pointerActive && (vel.theta || vel.phi)) {
+    want.theta += vel.theta * dt; want.phi += vel.phi * dt;
+    const decay = Math.exp(-dt * 5); vel.theta *= decay; vel.phi *= decay;
+    if (Math.abs(vel.theta) < .01 && Math.abs(vel.phi) < .01) vel.theta = vel.phi = 0;
+  }
+  if (follow && selected) want.target.set(selected.g.position.x, 0, selected.g.position.z);
+  clampWant();
+  const k = 1 - Math.exp(-dt * SMOOTH);
+  cam.theta += (want.theta - cam.theta) * k; cam.phi += (want.phi - cam.phi) * k; cam.dist += (want.dist - cam.dist) * k;
+  cam.target.lerp(want.target, follow ? 1 - Math.exp(-dt * 4) : k);
+  const [ox, oy] = offsetsFor(usableRect(true)), ko = 1 - Math.exp(-dt * 8);
+  view.goalX = ox; view.goalY = oy;
+  view.offX += (ox - view.offX) * ko; view.offY += (oy - view.offY) * ko;
+  placeCamera(cam.theta, cam.phi, cam.dist, cam.target, view.offX, view.offY);
+}
+function panBy(dx, dy) {
+  const wpp = 2 * cam.dist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / innerHeight;
+  const right = new V3(Math.cos(cam.theta), 0, -Math.sin(cam.theta)), fwd = new V3(-Math.sin(cam.theta), 0, -Math.cos(cam.theta));
+  want.target.addScaledVector(right, -dx * wpp).addScaledVector(fwd, dy * wpp / Math.max(.35, Math.cos(cam.phi)));
+  if (follow) { follow = false; syncFollowBtn(); }
+  atHome = false;
+}
+
+/* ================= Touch / mouse input ================= */
+const canvas = renderer.domElement;
+const pointers = new Map();
+const ROT = .0065, TAP_SLOP = 9;
+const g = { mode: 'none', moved: 0, multi: false, t0: 0, pinchD: 0, pinchDist: 0, mid: null, lastT: 0, button: 0 };
+const pts = () => [...pointers.values()];
+const midOf = ps => [(ps[0].x + ps[1].x) / 2, (ps[0].y + ps[1].y) / 2];
+function beginPinch() { const ps = pts(); g.mode = 'pinch'; g.multi = true; g.pinchD = Math.max(1, Math.hypot(ps[0].x - ps[1].x, ps[0].y - ps[1].y)); g.pinchDist = want.dist; g.mid = midOf(ps); vel.theta = vel.phi = 0; }
+canvas.addEventListener('pointerdown', e => {
+  if (pointers.size >= 2) return;
+  try { canvas.setPointerCapture(e.pointerId); } catch {}
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 1) { g.mode = (e.button === 2 || e.shiftKey) ? 'pan' : 'orbit'; g.moved = 0; g.multi = false; g.t0 = performance.now(); g.lastT = g.t0; vel.theta = vel.phi = 0; }
+  else beginPinch();
+});
+canvas.addEventListener('pointermove', e => {
+  const p = pointers.get(e.pointerId); if (!p) return;
+  const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
+  if (g.mode === 'pinch' && pointers.size >= 2) {
+    const ps = pts(), d = Math.max(1, Math.hypot(ps[0].x - ps[1].x, ps[0].y - ps[1].y)), m = midOf(ps);
+    want.dist = clamp(g.pinchDist * g.pinchD / d, LIMITS.distMin, LIMITS.distMax);
+    if (!follow) panBy(m[0] - g.mid[0], m[1] - g.mid[1]); // keep following while zooming
+    g.mid = m; atHome = false; return;
+  }
+  g.moved += Math.abs(dx) + Math.abs(dy);
+  if (g.moved < TAP_SLOP) return;
+  if (g.mode === 'pan') { panBy(dx, dy); return; }
+  if (g.mode === 'orbit') {
+    const s = ROT * settings.sensitivity, now = performance.now(), dt = Math.max(1, now - g.lastT) / 1000; g.lastT = now;
+    want.theta -= dx * s; want.phi = clamp(want.phi - dy * s, LIMITS.phiMin, LIMITS.phiMax);
+    // smoothed velocity for fling
+    vel.theta = vel.theta * .6 + (-dx * s / dt) * .4; vel.phi = vel.phi * .6 + (-dy * s / dt) * .4;
+    atHome = false;
+  }
+});
+function endPointer(e, cancelled) {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.delete(e.pointerId);
+  const now = performance.now();
+  if (pointers.size === 1) { g.mode = 'orbit'; g.moved = 0; g.lastT = now; vel.theta = vel.phi = 0; return; } // pinch -> one finger: rebase, no jump
+  if (pointers.size === 0) {
+    const tap = !cancelled && !g.multi && g.moved < TAP_SLOP && now - g.t0 < 600 && g.mode !== 'pan';
+    if (tap) { vel.theta = vel.phi = 0; pick(e.clientX, e.clientY); }
+    else if (g.mode !== 'orbit' || now - g.lastT > 90 || g.multi) { vel.theta = vel.phi = 0; } // only fling on a fresh release
+    vel.theta = clamp(vel.theta, -4, 4); vel.phi = clamp(vel.phi, -3, 3);
+    g.mode = 'none';
+  }
+}
+canvas.addEventListener('pointerup', e => endPointer(e, false));
+canvas.addEventListener('pointercancel', e => endPointer(e, true));
+canvas.addEventListener('lostpointercapture', e => endPointer(e, true));
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+canvas.addEventListener('wheel', e => { e.preventDefault(); want.dist = clamp(want.dist * Math.exp(e.deltaY * (e.ctrlKey ? .01 : .0012)), LIMITS.distMin, LIMITS.distMax); atHome = false; }, { passive: false });
+// Stop iOS Safari's page pinch-zoom from hijacking two-finger gestures.
+for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, e => e.preventDefault());
+
+function pick(x, y) {
+  raycaster.setFromCamera(new THREE.Vector2(x / innerWidth * 2 - 1, -(y / innerHeight) * 2 + 1), camera);
+  const hits = raycaster.intersectObjects(residents.flatMap(r => r.g.children));
+  let r = hits.length ? residents.find(r => r.g.children.includes(hits[0].object)) : null;
+  if (!r) { // forgiving touch target: nearest resident within 36px
+    let best = 36;
+    for (const c of residents) { _p.set(c.g.position.x, 1.3, c.g.position.z).project(camera); if (_p.z > 1) continue; const d = Math.hypot((_p.x + 1) / 2 * innerWidth - x, (1 - _p.y) / 2 * innerHeight - y); if (d < best) { best = d; r = c; } }
+  }
+  if (r) openSheet(r);
+}
+
+/* ================= Resident bottom sheet ================= */
+const sheet = $('sheet');
+function syncFollowBtn() { const b = $('sFollow'); b.textContent = follow ? 'Following' : 'Follow'; b.setAttribute('aria-pressed', String(follow)); }
+function openSheet(r) {
+  if (selected !== r && follow) follow = false;
+  selected = r; syncFollowBtn();
+  $('sSwatch').style.background = '#' + r.color.toString(16).padStart(6, '0');
+  $('sName').textContent = r.name; $('sJob').textContent = r.job;
+  sheet.classList.remove('expanded');
+  document.body.classList.add('sheet-open'); sheet.setAttribute('aria-hidden', 'false');
+  updateSheet(true);
+}
+function closeSheet() {
+  selected = null; follow = false; syncFollowBtn();
+  document.body.classList.remove('sheet-open'); sheet.classList.remove('expanded'); sheet.setAttribute('aria-hidden', 'true');
+}
+function setBar(id, v) { const pct = Math.round(v); $(id + 'V').textContent = pct + '%'; const b = $(id + 'B'); b.firstElementChild.style.width = pct + '%'; b.classList.toggle('low', pct < 30); }
+let lastSheetKey = '';
+function updateSheet(force) {
+  const r = selected; if (!r) return;
+  $('sActivity').innerHTML = ''; const lbl = document.createElement('span'); lbl.textContent = 'Now: '; $('sActivity').append(lbl, r.state);
+  setBar('sEnergy', r.energy); setBar('sHunger', r.hunger); setBar('sSocial', r.social);
+  $('sMemory').textContent = '💭 ' + (r.memories[0] || 'A fresh start');
+  const key = r.id + '|' + r.memories.join('|') + '|' + JSON.stringify(r.friendships);
+  if (force || key !== lastSheetKey) {
+    lastSheetKey = key;
+    const li = t => { const e = document.createElement('li'); e.textContent = t; return e; };
+    $('sMemList').replaceChildren(...(r.memories.length ? r.memories : ['A fresh start']).map(li));
+    const fr = Object.entries(r.friendships).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    $('sFriendList').replaceChildren(...(fr.length ? fr.map(([n, c]) => n + ' — ' + c + (c === 1 ? ' chat' : ' chats')) : ['No friends yet']).map(li));
+  }
+}
+function focusOn(r) { want.target.set(r.g.position.x, 0, r.g.position.z); want.dist = Math.min(want.dist, Math.max(home.dist * .7, 22)); atHome = false; }
+function nextResident() { const r = residents[selected ? (selected.id + 1) % residents.length : 0]; openSheet(r); if (!follow) focusOn(r); }
+$('sFollow').onclick = () => { if (!selected) return; follow = !follow; syncFollowBtn(); if (follow) atHome = false; };
+$('sNext').onclick = nextResident;
+$('sClose').onclick = closeSheet;
+// Drag the sheet: up to expand, down to collapse/close; tap the handle to toggle.
+(() => {
+  let y0 = null, dy = 0, id = null;
+  const down = e => { if (e.target.closest('button') && e.target.id !== 'grab') return; y0 = e.clientY; dy = 0; id = e.pointerId; try { e.currentTarget.setPointerCapture(id); } catch {} sheet.classList.add('dragging'); };
+  const move = e => { if (y0 === null || e.pointerId !== id) return; dy = e.clientY - y0; if (dy > 0) sheet.style.transform = `translateY(${dy}px)`; };
+  const up = e => {
+    if (y0 === null || e.pointerId !== id) return; y0 = null; sheet.classList.remove('dragging'); sheet.style.transform = '';
+    if (dy > 70) { if (sheet.classList.contains('expanded')) sheet.classList.remove('expanded'); else closeSheet(); }
+    else if (dy < -30) sheet.classList.add('expanded');
+    else if (Math.abs(dy) < 6 && e.currentTarget.id === 'grab') sheet.classList.toggle('expanded');
+  };
+  for (const el of [$('grab'), $('sheetHead')]) { el.addEventListener('pointerdown', down); el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up); }
+})();
+
+/* ================= HUD wiring ================= */
+let toastTimer = 0;
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 1800); }
+$('pause').onclick = () => { paused = !paused; $('pause').textContent = paused ? '▶' : 'Ⅱ'; $('pause').setAttribute('aria-label', paused ? 'Resume' : 'Pause'); };
+$('speed').onclick = () => { speed = speed === 1 ? 3 : speed === 3 ? 10 : 1; $('speed').textContent = speed + '×'; };
+$('people').onclick = nextResident;
+$('resetCam').onclick = () => resetCamera();
+$('save').onclick = () => save();
+function setFeed(open) { $('feed').classList.toggle('open', open); $('feed').setAttribute('aria-hidden', String(!open)); $('clockPill').setAttribute('aria-expanded', String(open)); if (open) $('ticker').classList.remove('show'); }
+$('clockPill').onclick = () => setFeed(!$('feed').classList.contains('open'));
+$('ticker').onclick = () => setFeed(true);
+canvas.addEventListener('pointerdown', () => setFeed(false));
+$('menu').onclick = () => openSettings();
+
+/* ================= Title screen + settings ================= */
+let settingsOpen = false, hintTimer = 0;
+function fmtTime(m) { return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(Math.floor(m % 60)).padStart(2, '0'); }
+function refreshTitle() {
+  const s = readJSON(SAVE_KEY), canContinue = sessionStarted || !!s;
+  $('btnContinue').disabled = !canContinue;
+  let info = 'No saved town yet — start a new game';
+  if (sessionStarted) info = 'Resume Day ' + day + ' · ' + fmtTime(minutes);
+  else if (s) { info = 'Saved town · Day ' + (s.day ?? 1) + ' · ' + fmtTime(s.minutes ?? 480); if (s.savedAt) info += ' · ' + new Date(s.savedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); }
+  $('saveInfo').textContent = info;
+  (canContinue ? $('btnContinue') : $('btnNew')).classList.add('primary');
+  (canContinue ? $('btnNew') : $('btnContinue')).classList.remove('primary');
+}
+function showTitle() {
+  if (sessionStarted && settings.autosave) save(true);
+  started = false; closeSheet(); setFeed(false); $('ticker').classList.remove('show');
+  document.body.classList.add('mode-title'); document.body.classList.remove('in-game');
+  $('welcome').hidden = false; refreshTitle(); computeHome(); resetCamera();
+  $(sessionStarted || readJSON(SAVE_KEY) ? 'btnContinue' : 'btnNew').focus({ preventScroll: true });
+}
+function startGame() {
+  started = true; sessionStarted = true;
+  $('welcome').hidden = true; document.body.classList.remove('mode-title'); document.body.classList.add('in-game');
+  computeHome(); resetCamera();
+  if (settings.hints) { const h = $('hint'); h.classList.add('show'); clearTimeout(hintTimer); hintTimer = setTimeout(() => h.classList.remove('show'), 5000); }
+}
+$('btnContinue').onclick = () => { if (!$('btnContinue').disabled) startGame(); };
+$('btnNew').onclick = () => {
+  const hasSave = !!readJSON(SAVE_KEY);
+  if ((hasSave || sessionStarted) && !confirm('Start a new Willowbrook? Your saved town will be replaced.')) return;
+  try { localStorage.removeItem(SAVE_KEY); } catch {}
+  resetWorld(); paused = false; $('pause').textContent = 'Ⅱ'; startGame();
+};
+$('btnSettings').onclick = () => openSettings();
+
+function openSettings() {
+  settingsOpen = true;
+  $('optSens').value = settings.sensitivity; $('optShadows').checked = settings.shadows; $('optAutosave').checked = settings.autosave; $('optHints').checked = settings.hints;
+  $('setDelete').disabled = !readJSON(SAVE_KEY);
+  $('settings').hidden = false; $('setClose').focus({ preventScroll: true });
+}
+function closeSettings() { settingsOpen = false; $('settings').hidden = true; if (!started) refreshTitle(); }
+$('setClose').onclick = closeSettings;
+$('settings').addEventListener('click', e => { if (e.target === $('settings')) closeSettings(); });
+$('optSens').oninput = e => { settings.sensitivity = +e.target.value; writeSettings(); };
+$('optShadows').onchange = e => { settings.shadows = e.target.checked; sun.castShadow = settings.shadows; writeSettings(); };
+$('optAutosave').onchange = e => { settings.autosave = e.target.checked; writeSettings(); };
+$('optHints').onchange = e => { settings.hints = e.target.checked; writeSettings(); };
+$('setSave').onclick = () => { save(); $('setDelete').disabled = false; };
+$('setTitleBtn').onclick = () => { closeSettings(); showTitle(); };
+$('setDelete').onclick = () => {
+  if (!confirm('Delete your saved Willowbrook town? This can’t be undone.')) return;
+  try { localStorage.removeItem(SAVE_KEY); } catch {}
+  resetWorld(); sessionStarted = false; closeSettings(); showTitle(); toast('Saved town deleted');
+};
+
+document.addEventListener('keydown', e => {
+  if (e.target.matches('input')) return;
+  if (e.key === 'Escape') { if (settingsOpen) closeSettings(); else if ($('feed').classList.contains('open')) setFeed(false); else if (selected) closeSheet(); }
+  else if ((e.key === 'r' || e.key === 'R') && started && !settingsOpen) resetCamera();
+});
+
+/* ================= Loop, resize, autosave ================= */
+let last = performance.now(), acc = 0, sheetTick = 0, autosaveTick = 0, lastClock = '';
+function frame(t) {
+  requestAnimationFrame(frame);
+  const delta = clamp((t - last) / 1000, 0, .1); last = t; // never negative: keeps smoothing stable
+  if (started && !paused && !settingsOpen) { acc += delta * speed; while (acc > .12) { step(.12); acc -= .12; } }
+  if (!started) want.theta += delta * .05; // gentle idle orbit behind the title screen
+  updateCamera(delta);
+  sun.position.set(Math.cos(minutes / 1440 * Math.PI * 2) * 30, 10 + Math.sin(minutes / 1440 * Math.PI * 2) * 26, 12);
+  sun.intensity = minutes < 360 || minutes > 1200 ? .55 : 2.1;
+  scene.background.set(minutes < 360 || minutes > 1200 ? 0x273b57 : 0xb4def0);
+  const c = 'Day ' + day + ' · ' + fmtTime(minutes); if (c !== lastClock) { $('clock').textContent = c; lastClock = c; }
+  ring.visible = !!selected; if (selected) { ring.position.set(selected.g.position.x, .08, selected.g.position.z); ring.material.opacity = .65 + Math.sin(t / 250) * .25; }
+  if (selected && (sheetTick += delta) > .4) { sheetTick = 0; updateSheet(false); }
+  if (started && settings.autosave && (autosaveTick += delta) > 120) { autosaveTick = 0; save(true); }
+  renderer.render(scene, camera);
+}
+let resizeQueued = false;
+function onResize() {
+  if (resizeQueued) return; resizeQueued = true;
+  requestAnimationFrame(() => {
+    resizeQueued = false;
+    renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+    const wasHome = atHome; computeHome(); if (wasHome || !started) resetCamera();
+  });
+}
+window.addEventListener('resize', onResize);
+window.addEventListener('orientationchange', onResize);
+window.visualViewport?.addEventListener('resize', onResize);
+function autosaveNow() { if (sessionStarted && settings.autosave) save(true); }
+document.addEventListener('visibilitychange', () => { if (document.hidden) autosaveNow(); });
+window.addEventListener('pagehide', autosaveNow);
+
+for (const id of ['verWelcome']) $(id).textContent = 'v' + GAME_VERSION;
+$('verSettings').textContent = 'Tiny Living World v' + GAME_VERSION;
+
+computeHome(); resetCamera(true); refreshTitle();
+requestAnimationFrame(frame);
+
+// Small read-only hook for automated tests and debugging.
+window.__tlw = {
+  version: GAME_VERSION, cam, want, LIMITS, view,
+  get home() { return home; }, get state() { return { minutes, day, started, paused, speed, follow, selected: selected?.name ?? null, events: events.slice(), atHome }; },
+  residents: () => residents.map(r => ({ name: r.name, x: r.g.position.x, z: r.g.position.z, energy: r.energy, hunger: r.hunger, social: r.social })),
+  screenOf(i) { const r = residents[i]; _p.set(r.g.position.x, 1.3, r.g.position.z).project(camera); return { x: (_p.x + 1) / 2 * innerWidth, y: (1 - _p.y) / 2 * innerHeight }; },
+  townBounds() { return projectedBounds(); }, usableRect: () => usableRect(false), settings,
+};
+</script>
+</body>
+</html>

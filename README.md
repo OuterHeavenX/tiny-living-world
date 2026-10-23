@@ -12,18 +12,36 @@ Open the deployed `index.html` over HTTPS or a local web server. The Three.js mo
 
 You can alternatively connect this repository to Cloudflare Pages or Workers Static Assets. No build command is needed.
 
+Current version: **v0.2.0** (shown on the title screen and in Settings).
+
 ## Controls
-- **Desktop:** drag the view to orbit, scroll to zoom, click a resident.
-- **Phone/tablet:** drag to orbit, pinch to zoom, tap a resident.
-- **UI:** pause/resume, change speed (1×/3×/10×), cycle residents, save and reset.
-- Tap **Follow** inside a resident profile to follow them around the town.
+- **Phone/tablet:** one-finger drag to orbit, two-finger pinch to zoom (moving both fingers also pans), tap a resident.
+- **Desktop:** drag to orbit, right-drag or Shift-drag to pan, scroll to zoom, click a resident, **R** to reset the camera, **Esc** to close panels.
+- **Title screen:** Continue (resume your saved town), New Game, Settings.
+- **HUD:** tap the clock for *Town happenings*; pause/resume; speed (1×/3×/10×); ☰ menu for Settings, Save now, title screen and deleting the save.
+- **Bottom bar:** People (cycle residents), Reset view, Save.
+- **Resident sheet:** Follow, next resident (›), close; swipe up for memories and friends, swipe down to dismiss.
+
+## Settings
+Stored separately from the town save (`tlw-settings` in localStorage): camera sensitivity, shadows, autosave (every 2 minutes and when the app is backgrounded), and gesture hints. *Delete saved town* replaces the old HUD Reset button.
 
 ## State and limits
-- Saves are stored in **localStorage on the current device**; there is no cloud sync.
+- Saves are stored in **localStorage on the current device** under the same `tlw-save` key and format as v0.1 (v0.2 adds `version` and `savedAt` fields); there is no cloud sync. v0.1 saves load unchanged.
 - The simulation runs in the browser and pauses when the tab is closed.
 - Residents use lightweight procedural behaviors rather than paid AI APIs.
 - This is an early playable slice; full navigation/pathfinding, interior spaces, complex relationships, and Blender-made models are not implemented.
 - Mobile device QA and visual playtesting are still needed.
+
+## Development checks
+No build step is needed to play. For automated checks (Playwright + headless Chromium, emulating iPhone screens with real touch input):
+
+```bash
+npm install
+npx playwright install chromium
+npm test
+```
+
+`npm test` parses the game module, then runs browser tests covering the title screen, camera framing on several iPhone sizes and orientations, one-finger orbit, pinch zoom and limits, Reset Camera, the resident bottom sheet, safe-area layout, pause/speed, save → reload → Continue, legacy v0.1 save loading, New Game/delete flows, settings persistence and autosave. Set `SHOTS_DIR=some/folder` to also save screenshots.
 
 ## License
 All original prototype code. Third-party Three.js is loaded from its CDN under its own license.
