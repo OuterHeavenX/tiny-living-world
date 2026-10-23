@@ -15,6 +15,9 @@ export const LOOKS = {
   Mia: { scale: .97, skin: 0xb7794f, hair: ['bun', 0x2a1a14], top: 0xde9b5b, sleeves: 'rolled', pants: 0x2f2f2f, shoes: 0x2b2b2b, apron: [0x6e4a35, 'waist'], earrings: 0xe8c35a, blush: true, hold: 'cup', swatch: 0xde9b5b },
   Noah: { scale: 1.05, skin: 0xd9a27c, hair: ['short', 0x1f1a17], hat: ['cap', 0xe07b39], top: 0x5677b2, sleeves: 'rolled', pants: 0x5677b2, overalls: true, shoes: 0x3a2a1f, beard: 0x1f1a17, hold: 'wrench', swatch: 0x5677b2 },
   Lily: { scale: .94, skin: 0xf3cfb2, hair: ['long', 0xb5523b], hat: ['beret', 0xd9493c], top: 0x2f466b, smock: 0xf3eee0, sleeves: 'long', pants: 0xa96d97, shoes: 0xffd166, hold: 'brush', blush: true, swatch: 0xa96d97 },
+  // construction crew (no names in the town; they come and go with each project)
+  Worker: { scale: 1.02, skin: 0xd9a27c, hair: ['short', 0x3b2a20], hat: ['hardhat', 0xf2c14e], top: 0x5c6f82, vest: 0xff8c2a, sleeves: 'rolled', pants: 0x45505c, shoes: 0x3a2a1f, hold: 'wrench', swatch: 0xff8c2a },
+  Worker2: { scale: .98, skin: 0x8d5a3b, hair: ['short', 0x1f1a17], hat: ['hardhat', 0xffffff], top: 0x6e5a48, vest: 0xc6e83a, sleeves: 'long', pants: 0x3f4a6b, shoes: 0x2b2b2b, beard: 0x1f1a17, swatch: 0xc6e83a },
   Ethan: { scale: 1.06, skin: 0xc68e66, hair: ['messy', 0x3b2a20], top: 0x7f9a52, hood: true, sleeves: 'long', pants: 0x3f5f8a, shoes: 0xf2f2f2, headphones: 0x222222, swatch: 0x9d854d },
 };
 
@@ -80,6 +83,7 @@ export function buildCharacter(name) {
     else if (kind === 'short') { B.box(c, 0, 1.0, .16, .4, .42, .025, -.08); }
     else { B.box(c, 0, .8, .16, .44, .48, .025, -.05); B.box(c, 0, 1.05, 0, .46, .05, .3); }
   }
+  if (L.vest) { B.add(Geo.torso, L.vest, at(0, 1.3, .004, .262, .5, .162)); for (const y of [1.18, 1.36]) B.box(0xf2f2f2, 0, y, .162, .4, .035, .012); }
   if (L.overalls) { B.box(L.pants, 0, 1.16, .145, .32, .32, .03); for (const s of [-1, 1]) B.box(darker(L.pants, .8), s * .12, 1.45, .14, .05, .34, .03); B.box(0x2b2b2b, .07, 1.0, .16, .14, .14, .02); B.ball(0x2b2b2b, -.1, 1.2, .15, .04, .04, .01, true); }
   if (L.smock) { B.add(Geo.torso, L.smock, at(0, 1.18, .005, .265, .58, .165)); for (const [x, y, c] of [[.08, 1.2, 0xd9493c], [-.1, 1.05, 0xffd166], [.12, .98, 0x6fa8ff], [-.05, 1.32, 0x5fa04f]]) B.ball(c, x, y, .17, .035, .035, .012, true); }
   if (L.hood) { B.ball(darker(L.top, .9), 0, 1.66, -.13, .2, .13, .1); B.box(darker(L.top, .85), 0, 1.13, .15, .26, .14, .03); for (const s of [-1, 1]) B.box(0xffffff, s * .05, 1.48, .155, .015, .14, .015); }
@@ -146,6 +150,7 @@ function hair(H, style, c) {
 function hat(H, kind, c) {
   if (kind === 'toque') { H.cyl(c, 0, .5, 0, .27, .14, .26); H.ball(c, 0, .7, 0, .3, .2, .29); H.ball(c, .1, .74, .06, .14); H.ball(c, -.1, .75, -.05, .15); }
   if (kind === 'cap') { H.ball(c, 0, .44, 0, .29, .14, .28); H.box(c, 0, .43, .25, .3, .03, .22); H.box(0xffffff, 0, .52, .25, .1, .06, .02); }
+  if (kind === 'hardhat') { H.ball(c, 0, .45, 0, .3, .2, .3); H.cyl(c, 0, .43, .02, .34, .03, .35); H.box(darker(c, .85), 0, .6, 0, .05, .06, .44); }
   if (kind === 'beret') { H.add(Geo.cyl, c, at(.03, .52, 0, .3, .08, .29, 0, 0, .22)); H.ball(c, .05, .58, 0, .04); }
 }
 
@@ -204,6 +209,7 @@ function drawBubble(kind) {
   if (kind === 'note') { x.fillStyle = '#6f5bd6'; x.beginPath(); x.ellipse(cx - 12, cy + 16, 12, 9, -.4, 0, PI * 2); x.fill(); x.fillRect(cx - 2, cy - 26, 6, 42); x.fillRect(cx - 2, cy - 26, 26, 8); }
   if (kind === 'cup') { x.fillStyle = '#8a5a3b'; x.fillRect(cx - 24, cy - 12, 36, 32); x.lineWidth = 6; x.strokeStyle = '#8a5a3b'; x.beginPath(); x.arc(cx + 14, cy + 3, 9, -PI / 2, PI / 2); x.stroke(); x.strokeStyle = '#b9c9c6'; x.lineWidth = 4; for (const dx of [-14, -2]) { x.beginPath(); x.moveTo(cx + dx, cy - 18); x.quadraticCurveTo(cx + dx + 8, cy - 26, cx + dx, cy - 34); x.stroke(); } }
   if (kind === 'zzz') { x.fillStyle = '#5f7d95'; x.font = '800 34px system-ui, sans-serif'; x.textAlign = 'center'; x.fillText('z', cx - 18, cy + 18); x.font = '800 44px system-ui, sans-serif'; x.fillText('Z', cx + 12, cy + 8); }
+  if (kind === 'argue') { x.fillStyle = '#d9493c'; x.font = '900 52px system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('!?', cx, cy + 2); }
   if (kind === 'flower') { for (let k = 0; k < 5; k++) { const a = k * PI * 2 / 5; x.fillStyle = '#ff7aa2'; x.beginPath(); x.arc(cx + Math.cos(a) * 14, cy + Math.sin(a) * 14, 11, 0, PI * 2); x.fill(); } x.fillStyle = '#ffd166'; x.beginPath(); x.arc(cx, cy, 9, 0, PI * 2); x.fill(); }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
@@ -230,7 +236,14 @@ export const FOOTPRINTS = [
   { site: 7, r: [17.35, -2.95, 24.65, 2.95] },       // Corner Café
   { site: 8, r: [3.4, 16.3, 10.6, 22.85] },          // Town Hall
   { site: 5, r: [-8.75, -6.2, -5.25, -2.8] },        // park fountain
+  { site: 11, r: [-27.4, 17.85, -18.6, 24.15] },     // duck pond
 ];
+// Buildings that come and go (new construction on open lots) register their footprint here.
+export function setDynamicFootprint(site, rect) {
+  const i = FOOTPRINTS.findIndex(f => f.dynamic && f.site === site);
+  if (i >= 0) FOOTPRINTS.splice(i, 1);
+  if (rect) FOOTPRINTS.push({ site, r: rect, dynamic: true });
+}
 export const insideFootprint = (x, z, pad = 0) => FOOTPRINTS.find(f => !f.porch && x > f.r[0] - pad && x < f.r[2] + pad && z > f.r[1] - pad && z < f.r[3] + pad) || null;
 function segHitsRect(ax, az, bx, bz, [x0, z0, x1, z1]) { // Liang–Barsky
   let t0 = 0, t1 = 1; const dx = bx - ax, dz = bz - az;
@@ -300,6 +313,25 @@ export function createNav() {
     const E = add(7, 24.3, .2); link(E, onLineX(2.35, 24.3)); link(E, onLineX(10.65, 24.3));
     S[8] = { E, inside: true, spots: [spot(7.7, 24.05, PI, 'read', E, .2), spot(7, 29.0, 0, 'watch', E)] };
   }
+  // 9 / 10 — the Orchard Road lots: open land (garden, orchard) or, once built on, a shop facing Orchard Road
+  const lot = (x, land) => {
+    const B = add(x, 12.9); link(B, onLineZ(x, 10.45));
+    return { land, built: { E: B, inside: true, spots: [] } };
+  };
+  { // 9 Community Garden (gate on the south side)
+    const E = add(-6.5, 26.0); link(E, onLineX(-10.65, 26.0)); link(E, onLineX(-2.35, 26.0));
+    S[9] = { ...lot(-6.5, { E, inside: false, spots: [spot(-6.6, 24.55, PI, 'garden', E), spot(-4.9, 26.35, PI, 'watch', E)] }) };
+  }
+  { // 10 Old Orchard (picnic corner at the back)
+    const E = add(22.5, 28.0); link(E, onLineX(15.35, 28.0));
+    S[10] = { ...lot(22.5, { E, inside: false, spots: [spot(24.1, 26.45, 0, 'sit', E), spot(20.4, 27.2, PI, 'watch', E)] }) };
+  }
+  { // 11 Duck Pond (bench and lakeside path)
+    const E = add(-21.2, 27.0); link(E, onLineX(-15.35, 27.0)); const n1 = add(-21.0, 25.0); link(E, n1);
+    S[11] = { E, inside: false, spots: [spot(-23.0, 25.35, PI, 'sit', n1), spot(-20.6, 25.4, PI - .5, 'watch', n1)] };
+  }
+  const setLot = (si, mode) => { const v = S[si][mode === 'built' ? 'built' : 'land']; Object.assign(S[si], { E: v.E, inside: v.inside, spots: v.spots, mode }); };
+  setLot(9, 'land'); setLot(10, 'land');
   for (const ids of onX.values()) { ids.sort((a, b) => nodes[a].z - nodes[b].z); for (let i = 1; i < ids.length; i++) link(ids[i - 1], ids[i]); }
   for (const ids of onZ.values()) { ids.sort((a, b) => nodes[a].x - nodes[b].x); for (let i = 1; i < ids.length; i++) link(ids[i - 1], ids[i]); }
 
@@ -321,7 +353,7 @@ export function createNav() {
     if (out.length && Math.hypot(out[0].x - from.x, out[0].z - from.z) < .05) out.shift();
     return out.map(n => ({ x: n.x, y: n.y, z: n.z }));
   }
-  return { nodes, sites: S, path, node: i => nodes[i], adjacency: adj };
+  return { nodes, sites: S, path, node: i => nodes[i], adjacency: adj, setLot };
 }
 
 /* ======================= MOOD ======================= */
