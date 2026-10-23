@@ -7,12 +7,13 @@ Willowbrook is a cozy floating diorama: hand-shaped procedural buildings, garden
 ## Play
 Open the deployed `index.html` over HTTPS or a local web server. The Three.js module loads from jsDelivr, so an internet connection is required.
 
-### GitHub Pages
-1. In this repository, open **Settings → Pages**.
-2. Select **Deploy from a branch**, branch **main**, folder **/(root)**, then save.
-3. After GitHub publishes, visit `https://outerheavenx.github.io/tiny-living-world/`.
+### GitHub Pages (recommended)
+The game is plain static files — no build step. Everything is referenced with relative paths (`./src/world.js`, `./src/residents.js`), so it works from the repository sub-path `https://outerheavenx.github.io/tiny-living-world/`. A `.nojekyll` file makes Pages serve the files untouched.
+1. Merge the release into **main**.
+2. In this repository, open **Settings → Pages** and choose **Deploy from a branch**, branch **main**, folder **/(root)**.
+3. Wait for the Pages deployment to finish (Actions tab), then open `https://outerheavenx.github.io/tiny-living-world/` and hard-refresh.
 
-You can alternatively connect this repository to Cloudflare Pages or Workers Static Assets. No build command is needed.
+You can alternatively connect this repository to Cloudflare Pages or Workers Static Assets (output directory: repository root, no build command).
 
 Current version: **v0.2.0** (shown on the title screen and in Settings).
 
@@ -25,7 +26,9 @@ Current version: **v0.2.0** (shown on the title screen and in Settings).
 - **Resident sheet:** Follow, next resident (›), close; swipe up for memories and friends, swipe down to dismiss.
 
 ## Settings
-Stored separately from the town save (`tlw-settings` in localStorage): camera sensitivity, shadows, autosave (every 2 minutes and when the app is backgrounded), and gesture hints. *Delete saved town* replaces the old HUD Reset button.
+Stored separately from the town save (`tlw-settings` in localStorage): graphics quality (Auto/High/Medium/Low), camera sensitivity, shadows, autosave (every 2 minutes and when the app is backgrounded), and gesture hints. *Delete saved town* replaces the old HUD Reset button.
+
+**Graphics quality:** High = up to 2× pixel density and 2048px shadows (desktop default); Medium = 1.5× and 1024px shadows (phone default); Low = 1× and no shadows. In Auto, the game measures the real frame rate while you play and steps down if it stays below ~26 fps.
 
 ## Residents
 Eight stylized low-poly people, each with their own face, hairstyle, outfit and props: Oliver the baker (chef's toque, apron), Emma the florist (pastels, flower in her hair), Sarah the journalist (blazer, glasses, satchel, notepad), Marcus the mayor (suit and tie), Mia the café owner (bun, apron, coffee cup), Noah the mechanic (cap, overalls, wrench), Lily the artist (beret, paint-spattered smock, brush) and Ethan (hoodie, headphones, jeans).
@@ -50,7 +53,8 @@ Static scenery is baked into a few merged, vertex-coloured, flat-shaded meshes (
 - The simulation runs in the browser and pauses when the tab is closed.
 - Residents use lightweight procedural behaviors rather than paid AI APIs.
 - This is an early playable slice; interiors and complex relationships are not implemented. Residents don't avoid each other on the sidewalk (they can briefly overlap).
-- Mobile device QA and visual playtesting are still needed.
+- Automated tests run in desktop Chromium emulating iPhone screens and touch; they are not a substitute for testing on a real iPhone/Safari.
+- See [CHANGELOG.md](CHANGELOG.md) for everything in v0.2.0.
 
 ## Development checks
 No build step is needed to play. For automated checks (Playwright + headless Chromium, emulating iPhone screens with real touch input):
@@ -61,7 +65,7 @@ npx playwright install chromium
 npm test
 ```
 
-`npm test` parses the game module, then runs browser tests covering the title screen, camera framing on several iPhone sizes and orientations, one-finger orbit, pinch zoom and limits, Reset Camera, the resident bottom sheet, safe-area layout, pause/speed, save → reload → Continue, legacy v0.1 save loading, New Game/delete flows, settings persistence and autosave. Set `SHOTS_DIR=some/folder` to also save screenshots.
+`npm test` parses the game modules, then runs browser tests covering the title screen, camera framing on several iPhone sizes and orientations, one-finger orbit, pinch zoom and limits, Reset Camera, the resident bottom sheet, safe-area layout, pause/speed, save → reload → Continue, legacy v0.1 save loading, New Game/delete flows, settings persistence and autosave, the diorama layout and draw-call budget, character models and animation, navigation (no walking through buildings), night routines, greetings and chats, save migration and corruption handling, adaptive graphics quality, and serving from the GitHub Pages sub-path. Set `SHOTS_DIR=some/folder` to also save screenshots. The same checks run on GitHub Actions (`.github/workflows/checks.yml`) for every push and pull request.
 
 ## License
 All original prototype code. Third-party Three.js is loaded from its CDN under its own license.

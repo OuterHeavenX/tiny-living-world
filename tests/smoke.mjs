@@ -22,8 +22,8 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
 
 // Functional tests run with shadows off (a supported Settings option) so software GL stays fast;
 // scene/performance/visual tests pass { shadows: true } to exercise the default look.
-async function open(device = devices['iPhone 13'], { storage = null, css = null, shadows = false } = {}) {
-  storage = { 'tlw-settings': JSON.stringify({ shadows }), ...(storage || {}) };
+async function open(device = devices['iPhone 13'], { storage = null, css = null, shadows = false, quality = 'medium', base = '' } = {}) {
+  storage = { 'tlw-settings': JSON.stringify({ shadows, quality }), ...(storage || {}) };
   const ctx = await browser.newContext({ ...device }); openContexts.add(ctx);
   const page = await ctx.newPage();
   page.errors = [];
@@ -31,10 +31,17 @@ async function open(device = devices['iPhone 13'], { storage = null, css = null,
   page.on('console', m => { if (m.type() === 'error') page.errors.push(m.text()); });
   if (fs.existsSync(path.join(THREE_DIR, 'three.module.js'))) // serve three.js locally when available (offline / deterministic)
     await page.route(THREE_URL + '*', r => r.fulfill({ path: path.join(THREE_DIR, path.basename(new URL(r.request().url()).pathname)), contentType: 'text/javascript' }));
-  await page.route(ORIGIN + '**', r => { const pn = new URL(r.request().url()).pathname; const file = path.join(ROOT, pn === '/' ? 'index.html' : pn); r.fulfill({ path: file, contentType: file.endsWith('.js') ? 'text/javascript' : 'text/html' }); });
+  page.missing = [];
+  await page.route(ORIGIN + '**', r => { // static server: files exist only under the base path, everything else 404s
+    let pn = new URL(r.request().url()).pathname;
+    if (base && !pn.startsWith(base)) { page.missing.push(pn); return r.fulfill({ status: 404, body: 'not found' }); }
+    pn = pn.slice(base.length) || '/'; const file = path.join(ROOT, pn.endsWith('/') ? pn + 'index.html' : pn);
+    if (!fs.existsSync(file)) { page.missing.push(pn); return r.fulfill({ status: 404, body: 'not found' }); }
+    r.fulfill({ path: file, contentType: file.endsWith('.js') ? 'text/javascript' : 'text/html' });
+  });
   if (storage) await page.addInitScript(s => { if (!sessionStorage.getItem('seeded')) { for (const [k, v] of Object.entries(s)) localStorage.setItem(k, v); sessionStorage.setItem('seeded', '1'); } }, storage);
   if (css) await page.addInitScript(c => document.addEventListener('DOMContentLoaded', () => { const st = document.createElement('style'); st.textContent = c; document.head.append(st); }), css);
-  await page.goto(ORIGIN);
+  await page.goto(ORIGIN + base.replace(/^\//, ''));
   await page.waitForFunction(() => window.__tlw);
   await page.waitForTimeout(300);
   page.cdp = await ctx.newCDPSession(page);
@@ -387,7 +394,7 @@ await test('walking and idle animation, smooth turning', async () => {
   await p.evaluate(() => { __tlw.debug.lineup(-28, 28, 1.2, 0); __tlw.debug.place(0, -10, 5.55); __tlw.debug.walkTo(0, 6); });
   await p.tap('#speed'); await p.tap('#speed'); // 10× — also checks animation at the highest speed
   const samples = [];
-  for (let k = 0; k < 14; k++) { await p.waitForTimeout(150); samples.push(await tlw(p, '__tlw.debug.characters()[0].legL')); }
+  for (let k = 0; k < 80 && !(Math.max(...samples) > .2 && Math.min(...samples) < -.2); k++) { await p.waitForTimeout(150); samples.push(await tlw(p, '__tlw.debug.characters()[0].legL')); }
   ok(Math.max(...samples) > .2 && Math.min(...samples) < -.2, 'legs should swing while walking: ' + samples.map(v => v.toFixed(2)).join(','));
   const r = (await tlw(p, '__tlw.residents()'))[0];
   ok(r.walking && Math.abs(Math.atan2(Math.sin(r.yaw - r.faceYaw), Math.cos(r.yaw - r.faceYaw))) < .5, 'walker should turn to face the way they walk');
@@ -473,6 +480,72 @@ await test('migrates v0.1 saves where residents stood inside buildings', async (
   await p.tap('#save');
   const saved = await p.evaluate(() => JSON.parse(localStorage.getItem('tlw-save')));
   ok(saved.saveFormat === 2 && saved.residents.every(r => typeof r.inside === 'number'), 'new saves record who is indoors');
+  await p.context().close();
+});
+
+await test('GitHub Pages: works when served from /tiny-living-world/ with relative asset paths', async () => {
+  const p = await open(devices['iPhone 13'], { base: '/tiny-living-world/' });
+  await startNew(p);
+  ok(p.missing.length === 0, 'requests outside the repo base path / missing files: ' + p.missing.join(', '));
+  ok((await tlw(p, '__tlw.world.locations.length')) === 9 && (await tlw(p, '__tlw.debug.characters().length')) === 8, 'town and residents load');
+  ok(p.errors.length === 0, 'console errors: ' + p.errors.join(' | '));
+  for (const f of ['.nojekyll', 'index.html', 'src/world.js', 'src/residents.js']) ok(fs.existsSync(path.join(ROOT, f)), f + ' missing from the published root');
+  ok(!/src=["']\/|from ['"]\/|href=["']\/(?!\/)/.test(fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8')), 'index.html uses a root-absolute path (breaks on GitHub Pages)');
+  await p.context().close();
+});
+
+await test('graphics quality: Auto steps down on slow devices; manual levels are respected', async () => {
+  const p = await open(devices['iPhone 13'], { quality: 'auto', shadows: true });
+  const q0 = await tlw(p, '__tlw.quality()');
+  ok(q0.level === 'medium' && q0.pixelRatio <= 1.5, 'phones start at medium quality: ' + JSON.stringify(q0));
+  await startNew(p);
+  // this software renderer is far slower than any phone, so Auto must react
+  ok(await p.waitForFunction(() => __tlw.quality().level === 'low', null, { timeout: 60000 }).then(() => true, () => false), 'Auto should drop to low when the frame rate stays below ~26fps: ' + JSON.stringify(await tlw(p, '__tlw.quality()')));
+  const q1 = await tlw(p, '__tlw.quality()'); ok(q1.pixelRatio === 1 && q1.shadowMap === 0 && q1.fps > 0, 'low = 1x pixels, no shadows: ' + JSON.stringify(q1));
+  await p.tap('#menu'); await p.selectOption('#optQuality', 'high'); await p.tap('#setClose');
+  const q2 = await tlw(p, '__tlw.quality()'); ok(q2.level === 'high' && q2.shadowMap === 2048 && q2.pixelRatio > 1.5, 'manual High: ' + JSON.stringify(q2));
+  await p.waitForTimeout(9000);
+  ok((await tlw(p, '__tlw.quality()')).level === 'high', 'a manual level is never auto-changed');
+  await p.tap('#menu'); await p.click('#optShadows'); await p.tap('#setClose');
+  ok((await tlw(p, '__tlw.quality()')).shadowMap === 0, 'shadows toggle still works on top of quality');
+  await p.context().close();
+  const d = await open({ viewport: { width: 1280, height: 800 } }, { quality: 'auto' });
+  ok((await tlw(d, '__tlw.quality()')).level === 'high', 'desktops start at high');
+  await d.context().close();
+});
+
+await test('saves: unreadable data is backed up (not silently lost) and bad values are repaired', async () => {
+  const p = await open(devices['iPhone 13'], { storage: { 'tlw-save': '{"minutes": 600, "day": 3, "resid' } });
+  ok(await p.isDisabled('#btnContinue'), 'cannot continue an unreadable save');
+  ok((await p.textContent('#saveInfo')).includes('couldn’t be read'), 'player is told: ' + await p.textContent('#saveInfo'));
+  ok(await p.evaluate(() => localStorage.getItem('tlw-save-unreadable')) === '{"minutes": 600, "day": 3, "resid', 'the unreadable data is kept as a backup');
+  await p.context().close();
+  const junk = { minutes: 'noon', day: -4, events: [1, 'Day 1: hi'], residents: [{ name: 'Oliver', x: 'a', z: null, energy: 900, social: NaN, hunger: -5, friendships: { Emma: 2, Zed: 9, Mia: 'x' }, memories: ['Oliver chatted with Emma', 7] }, { name: 'Emma', x: 1e9, z: 4, energy: 50, social: 50, hunger: 50 }] };
+  const q = await open(devices['iPhone 13'], { storage: { 'tlw-save': JSON.stringify(junk) } });
+  await q.tap('#btnContinue'); await q.tap('#pause');
+  const st = await tlw(q, '__tlw.state'), rs = await tlw(q, '__tlw.residents()');
+  ok(st.day === 1 && st.minutes >= 480 && st.minutes < 482, 'time repaired: ' + st.day + ' ' + st.minutes);
+  ok(rs.every(r => Number.isFinite(r.x) && Number.isFinite(r.z) && r.energy >= 0 && r.energy <= 100 && r.hunger >= 0 && r.social >= 0), 'no NaN or out-of-range values');
+  ok(rs[0].energy > 99.9 && JSON.stringify(rs[0].friendships) === '{"Emma":2}' && rs[0].memories.length === 1, 'valid parts of the save are kept: ' + JSON.stringify(rs[0]));
+  // a good save then a second save keeps a one-slot backup of the previous one
+  await q.tap('#save'); await q.evaluate(() => __tlw.debug.setMinutes(900)); await q.tap('#save');
+  const [cur, prev] = await q.evaluate(() => [JSON.parse(localStorage.getItem('tlw-save')), JSON.parse(localStorage.getItem('tlw-save-prev'))]);
+  ok(cur.minutes === 900 && prev && prev.minutes < 900, 'previous save kept as backup');
+  ok(q.errors.length === 0, 'console errors: ' + q.errors.join(' | '));
+  await q.context().close();
+});
+
+await test('a full day: schedules move every resident around town and memories survive a reload', async () => {
+  const p = await open(); await startNew(p); await p.tap('#pause');
+  const visited = await p.evaluate(() => { const seen = __tlw.residents().map(() => new Set()); for (let k = 0; k < 24 * 4; k++) { __tlw.debug.run(15, false); __tlw.residents().forEach((r, i) => { if (r.site >= 0) seen[i].add(r.site); }); } return seen.map(s => s.size); });
+  ok(visited.every(n => n >= 2), 'each resident should visit at least two places in a day: ' + visited.join(','));
+  const before = await tlw(p, '__tlw.residents()'), st = await tlw(p, '__tlw.state');
+  ok(before.some(r => r.memories.length) && st.day === 2, 'social memories formed over the day');
+  await p.tap('#save'); await p.reload(); await p.waitForFunction(() => window.__tlw);
+  const after = await tlw(p, '__tlw.residents()'), st2 = await tlw(p, '__tlw.state'); // restored state, before the simulation resumes
+  ok(await p.isEnabled('#btnContinue'), 'Continue offered');
+  ok(st2.day === st.day && Math.abs(st2.minutes - st.minutes) < 2, 'day and time restored');
+  ok(after.every((r, i) => JSON.stringify(r.memories) === JSON.stringify(before[i].memories) && JSON.stringify(r.friendships) === JSON.stringify(before[i].friendships) && r.inside === before[i].inside), 'memories, friendships and who-is-indoors restored');
   await p.context().close();
 });
 
