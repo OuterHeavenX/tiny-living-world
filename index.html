@@ -80,8 +80,11 @@ body.sheet-open #sheet{transform:translateY(0);visibility:visible;transition:tra
 #sFollow{font-size:13px}
 #sFollow[aria-pressed="true"]{background:var(--accent);color:#2b2414}
 #sNext,#sClose{background:rgba(255,255,255,.1);color:#fff}
-#sActivity{margin:8px 0 6px;font-size:13.5px}
-#sActivity span{color:var(--muted)}
+#sActivity{margin:8px 0 2px;font-size:13.5px}
+#sActivity span,#sGoal span{color:var(--muted)}
+#sGoal{margin:0 0 8px;font-size:12.5px;color:#fff;opacity:.92;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mood{display:inline-flex;align-items:center;gap:4px;margin-left:6px;padding:1px 8px;border-radius:10px;background:rgba(255,255,255,.12);font-size:11.5px;font-weight:700;vertical-align:2px}
+#sMore li.star::marker{content:'★ ';color:var(--accent)}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 .stat{font-size:11.5px;color:var(--muted)}
 .stat div{display:flex;justify-content:space-between}
@@ -166,19 +169,20 @@ body:not(.in-game) .ingame-only{display:none}
     <button id="grab" aria-label="Expand or collapse details"></button>
     <div class="sheet-head" id="sheetHead">
       <span class="swatch" id="sSwatch"></span>
-      <div class="who"><b id="sName"></b><small id="sJob"></small></div>
+      <div class="who"><b><span id="sName"></span><span class="mood" id="sMood"></span></b><small id="sJob"></small></div>
       <button id="sFollow" aria-pressed="false">Follow</button>
       <button id="sNext" aria-label="Next resident">›</button>
       <button id="sClose" aria-label="Close">✕</button>
     </div>
     <p id="sActivity"></p>
+    <p id="sGoal"></p>
     <div class="stats">
       <div class="stat"><div>Energy<em id="sEnergyV"></em></div><div class="bar" id="sEnergyB"><i></i></div></div>
       <div class="stat"><div>Fullness<em id="sHungerV"></em></div><div class="bar" id="sHungerB"><i></i></div></div>
       <div class="stat"><div>Social<em id="sSocialV"></em></div><div class="bar" id="sSocialB"><i></i></div></div>
     </div>
     <p id="sMemory"></p>
-    <div id="sMore"><h4>Memories</h4><ul id="sMemList"></ul><h4>Friends</h4><ul id="sFriendList"></ul></div>
+    <div id="sMore"><h4>Important memories</h4><ul id="sMemList"></ul><h4>Friends</h4><ul id="sFriendList"></ul></div>
   </div>
 </div>
 
@@ -218,6 +222,7 @@ body:not(.in-game) .ingame-only{display:none}
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
 import { buildWorld } from './src/world.js';
+import { buildCharacter, animateCharacter, makeBubble, createNav, insideFootprint, FOOTPRINTS, segmentBlocked, moodOf } from './src/residents.js';
 
 const GAME_VERSION = '0.2.0';
 const SAVE_KEY = 'tlw-save';          // unchanged from v0.1 so existing saves keep working
@@ -247,9 +252,28 @@ const sites = [[-20,-20,'Oliver’s Cottage',0xbad2ab],[-7,-20,'Emma’s House',
 const world = buildWorld(scene, sites, { shadows: settings.shadows, skyEl: $('scene'), shadowMapSize: 2048 });
 const sun = world.sun;
 
-/* ================= Residents (unchanged) ================= */
+/* ================= Residents ================= */
+// name, job, (v0.1 colour), home x, home z — homes and schedules are unchanged from v0.1
 const data = [['Oliver','Baker',0x4e839a,-20,-20],['Emma','Florist',0xdb7993,-7,-20],['Sarah','Journalist',0x866eb1,7,-20],['Marcus','Mayor',0x627d65,7,20],['Mia','Café owner',0xde9b5b,21,0],['Noah','Mechanic',0x5677b2,21,-20],['Lily','Artist',0xa96d97,-7,0],['Ethan','Job seeker',0x9d854d,7,0]];
-const residents = data.map(([name, job, color, x, z], i) => { let g = new THREE.Group(), body = new THREE.Mesh(new THREE.CylinderGeometry(.45, .5, 1.15, 8), mat(color)), head = new THREE.Mesh(new THREE.SphereGeometry(.45, 12, 10), skin); body.position.y = .93; head.position.y = 1.8; g.add(body, head); scene.add(g); g.position.set(x, 0, z); return { name, job, color, g, home: [x, z], dest: [x, z], energy: 70 + Math.random() * 25, social: 40 + Math.random() * 40, hunger: 70 + Math.random() * 20, friendships: {}, memories: [], state: 'Starting the day', next: 0, id: i }; });
+const nav = createNav();
+const siteIndexAt = (x, z) => { let best = 0, bd = Infinity; sites.forEach((s, i) => { const d = Math.hypot(s[0] - x, s[1] - z); if (d < bd) { bd = d; best = i; } }); return best; };
+const residents = data.map(([name, job, color, x, z], i) => {
+  const ch = buildCharacter(name); scene.add(ch.root);
+  const bubble = makeBubble(); ch.root.add(bubble);
+  return { name, job, color: ch.swatch, g: ch.root, rig: ch.rig, hit: ch.hit, bubble, home: [x, z], dest: [x, z], energy: 70 + Math.random() * 25, social: 40 + Math.random() * 40, hunger: 70 + Math.random() * 20, friendships: {}, memories: [], state: 'Starting the day', next: 0, id: i,
+    homeSite: siteIndexAt(x, z), pos: new THREE.Vector3(x, 0, z), prev: new THREE.Vector3(x, 0, z), path: [], pi: 0, inside: -1, enterAt: -1, site: -1, spot: null, atSpot: false,
+    talkUntil: -1, talkWith: null, talkKind: null, walking: false, walkW: 0, phase: 0, yaw: 0, faceYaw: 0, lastX: x, lastZ: z, thoughtAt: 4 + i * 1.3 };
+});
+function releaseSpot(r) { if (r.spot) { r.spot.owner = -1; r.spot = null; } r.atSpot = false; }
+// Put a resident at a position; anyone standing inside a building (e.g. v0.1 saves) is moved to its door, indoors.
+function placeAt(r, x, z, y = 0) {
+  releaseSpot(r); r.path = []; r.pi = 0; r.walking = false; r.talkUntil = -1; r.talkWith = null; r.enterAt = -1; r.site = -1;
+  const fp = insideFootprint(x, z);
+  if (fp) { const S = nav.sites[fp.site], e = nav.node(S.E); r.pos.set(e.x, e.y, e.z); r.inside = S.inside ? fp.site : -1; r.site = fp.site; }
+  else { r.pos.set(x, y, z); r.inside = -1; }
+  r.prev.copy(r.pos); r.g.position.copy(r.pos); r.lastX = r.pos.x; r.lastZ = r.pos.z;
+}
+residents.forEach(r => placeAt(r, r.home[0], r.home[1]));
 
 // Selection ring (UI affordance only; resident models unchanged)
 const ring = new THREE.Mesh(new THREE.RingGeometry(.75, .95, 32), new THREE.MeshBasicMaterial({ color: 0xfff4c2, transparent: true, opacity: .9, depthWrite: false }));
@@ -262,12 +286,15 @@ let sessionStarted = false; // player has entered the game this page session
 
 function applySave(saved) {
   minutes = saved?.minutes ?? 480; day = saved?.day ?? 1; events = saved?.events ?? ['Welcome to Willowbrook!'];
-  if (saved?.residents) saved.residents.forEach((v, i) => { const r = residents[i]; if (!r || v.name !== r.name) return; r.g.position.set(v.x, 0, v.z); r.energy = v.energy; r.social = v.social; r.hunger = v.hunger; r.friendships = v.friendships || {}; r.memories = v.memories || []; });
+  if (saved?.residents) saved.residents.forEach((v, i) => { const r = residents[i]; if (!r || v.name !== r.name) return;
+    if (saved.saveFormat >= 2 && typeof v.inside === 'number') { placeAt(r, v.x, v.z, v.y || 0); if (v.inside >= 0) { const e = nav.node(nav.sites[v.inside].E); r.pos.set(e.x, e.y, e.z); r.prev.copy(r.pos); r.inside = v.inside; } else if (insideFootprint(v.x, v.z)) placeAt(r, v.x, v.z); }
+    else placeAt(r, v.x, v.z); // v0.1 save: migrate people standing inside buildings to the door
+    r.energy = v.energy; r.social = v.social; r.hunger = v.hunger; r.friendships = v.friendships || {}; r.memories = v.memories || []; });
   renderEvents();
 }
 function resetWorld() {
   minutes = 480; day = 1; events = ['Welcome to Willowbrook!']; lastSocial = 0;
-  for (const r of residents) { r.g.position.set(r.home[0], 0, r.home[1]); r.g.rotation.y = 0; r.dest = [...r.home]; r.energy = 70 + Math.random() * 25; r.social = 40 + Math.random() * 40; r.hunger = 70 + Math.random() * 20; r.friendships = {}; r.memories = []; r.state = 'Starting the day'; r.next = 0; }
+  for (const r of residents) { placeAt(r, r.home[0], r.home[1]); r.yaw = r.faceYaw = 0; r.dest = [...r.home]; r.energy = 70 + Math.random() * 25; r.social = 40 + Math.random() * 40; r.hunger = 70 + Math.random() * 20; r.friendships = {}; r.memories = []; r.state = 'Starting the day'; r.next = 0; }
   closeSheet(); renderEvents();
 }
 function renderEvents() {
@@ -279,10 +306,65 @@ function flashTicker() { if (!started || $('feed').classList.contains('open')) r
 function log(s) { events.unshift('Day ' + day + ': ' + s); events = events.slice(0, 25); renderEvents(); flashTicker(); }
 
 function goal(r){let hour=minutes/60;let opts=hour<7||hour>=22?[r.home]:hour<17?[[...r.home],sites[4].slice(0,2),sites[6].slice(0,2),sites[7].slice(0,2)]:sites.map(s=>s.slice(0,2));if(r.hunger<30)opts=[sites[7].slice(0,2)];r.dest=opts[Math.floor(Math.random()*opts.length)].slice();r.dest[0]+=(Math.random()-.5)*2;r.dest[1]+=(Math.random()-.5)*2;r.state=hour<7||hour>=22?'Going home':r.hunger<30?'Getting food':hour<17?'Working or running errands':'Out exploring';r.next=minutes+20+Math.random()*85}
-function step(dt){let old=minutes;minutes+=dt;if(minutes>=1440){minutes-=1440;day++;log('A new day begins.');residents.forEach(r=>r.energy=Math.min(100,r.energy+30))}for(const r of residents){if(minutes>=r.next||minutes<old)goal(r);let dx=r.dest[0]-r.g.position.x,dz=r.dest[1]-r.g.position.z,len=Math.hypot(dx,dz);if(len>.25){let d=Math.min(len,dt*.5);r.g.position.x+=dx/len*d;r.g.position.z+=dz/len*d;r.g.rotation.y=Math.atan2(dx,dz)}r.hunger=Math.max(0,r.hunger-dt*.018);r.energy=Math.max(0,r.energy-dt*.012);if(r.state==='Getting food'&&len<1.5)r.hunger=Math.min(100,r.hunger+dt*.7)}if(Math.abs(minutes-lastSocial)>25){lastSocial=minutes;for(let i=0;i<residents.length;i++)for(let j=i+1;j<residents.length;j++){let a=residents[i],b=residents[j];if(a.g.position.distanceTo(b.g.position)<3&&Math.random()<.23){a.friendships[b.name]=(a.friendships[b.name]||0)+1;b.friendships[a.name]=(b.friendships[a.name]||0)+1;let m=a.name+' chatted with '+b.name;a.memories.unshift(m);b.memories.unshift(m);a.memories=a.memories.slice(0,6);b.memories=b.memories.slice(0,6);log(m);a.social=Math.min(100,a.social+8);b.social=Math.min(100,b.social+8)}}}}
+const simNow = () => (day - 1) * 1440 + minutes; // absolute sim minutes (safe across midnight)
+const WORKPLACE = { Oliver: 4, Emma: 6, Mia: 7, Marcus: 8 };
+// Turn the destination chosen by goal() into a route: a building entrance (to go inside) or an activity spot.
+function planRoute(r) {
+  const si = siteIndexAt(r.dest[0], r.dest[1]), S = nav.sites[si], hour = minutes / 60, night = hour < 7 || hour >= 22;
+  releaseSpot(r);
+  let enter = night ? S.inside : r.state === 'Getting food' ? false : S.inside && Math.random() < (WORKPLACE[r.name] === si ? .75 : .3), spot = null;
+  if (!enter) { const free = S.spots.filter(p => p.owner < 0 && (!night || p.seat)); spot = free.length ? free[Math.floor(Math.random() * free.length)] : null; if (!spot && S.inside) enter = true; }
+  if (r.inside >= 0) {
+    if (enter && r.inside === si) { r.site = si; r.enterAt = -1; r.path = []; r.pi = 0; const e = nav.node(S.E); r.dest = [e.x, e.z]; return; }
+    const e = nav.node(nav.sites[r.inside].E); r.pos.set(e.x, e.y, e.z); r.prev.copy(r.pos); r.inside = -1; // step out of the door
+  }
+  if (spot) spot.owner = r.id;
+  r.spot = spot; r.site = si; r.enterAt = enter ? si : -1;
+  const target = spot ? spot.node : S.E, tn = nav.node(target);
+  r.path = nav.path(r.pos, target); r.pi = 0; r.dest = [tn.x, tn.z];
+  if (!r.path.length) arrive(r);
+}
+function arrive(r) {
+  r.path = []; r.pi = 0;
+  if (r.enterAt >= 0) { r.inside = r.enterAt; r.enterAt = -1; }
+  else if (r.spot) { r.atSpot = true; r.faceYaw = r.spot.yaw; }
+}
+function moveResident(r, dt) {
+  r.walking = false;
+  if (r.inside < 0 && !(r.talkUntil > simNow())) {
+    let budget = dt * .5; // same walking speed as v0.1
+    while (budget > 1e-6 && r.pi < r.path.length) {
+      const p = r.path[r.pi], dx = p.x - r.pos.x, dz = p.z - r.pos.z, d = Math.hypot(dx, dz);
+      if (d > 1e-4) r.faceYaw = Math.atan2(dx, dz);
+      if (d <= budget) { r.pos.set(p.x, p.y, p.z); budget -= d; r.pi++; } else { const k = budget / d; r.pos.x += dx * k; r.pos.z += dz * k; r.pos.y += (p.y - r.pos.y) * k; budget = 0; }
+      r.walking = true;
+    }
+    if (r.path.length && r.pi >= r.path.length) arrive(r);
+  }
+  return Math.hypot(r.dest[0] - r.pos.x, r.dest[1] - r.pos.z);
+}
+const seated = r => r.atSpot && r.spot && r.spot.seat;
+function pauseTogether(a, b, mins, kind) {
+  for (const [x, y] of [[a, b], [b, a]]) { x.talkUntil = simNow() + mins; x.talkWith = y; x.talkKind = kind; if (!seated(x)) x.faceYaw = Math.atan2(y.pos.x - x.pos.x, y.pos.z - x.pos.z); }
+}
+const greetCooldown = new Map();
+function greetings() { // passers-by stop briefly, face each other and say hi
+  for (let i = 0; i < residents.length; i++) for (let j = i + 1; j < residents.length; j++) {
+    const a = residents[i], b = residents[j];
+    if (a.inside >= 0 || b.inside >= 0 || a.talkUntil > simNow() || b.talkUntil > simNow() || !(a.walking || b.walking)) continue;
+    if (Math.hypot(a.pos.x - b.pos.x, a.pos.z - b.pos.z) > 1.4) continue;
+    const k = i * 8 + j, T = simNow(); if ((greetCooldown.get(k) ?? -Infinity) > T) continue;
+    greetCooldown.set(k, T + 90); pauseTogether(a, b, 1.2, 'hi');
+  }
+}
+function chat(a, b) { // the v0.1 social rule's effects, plus a visible pause when both are outdoors
+  a.friendships[b.name]=(a.friendships[b.name]||0)+1;b.friendships[a.name]=(b.friendships[a.name]||0)+1;let m=a.name+' chatted with '+b.name;a.memories.unshift(m);b.memories.unshift(m);a.memories=a.memories.slice(0,6);b.memories=b.memories.slice(0,6);log(m);a.social=Math.min(100,a.social+8);b.social=Math.min(100,b.social+8);
+  if (a.inside < 0 && b.inside < 0) pauseTogether(a, b, 6, 'talk');
+}
+function step(dt){let old=minutes;minutes+=dt;if(minutes>=1440){minutes-=1440;day++;log('A new day begins.');residents.forEach(r=>r.energy=Math.min(100,r.energy+30))}for(const r of residents){r.prev.copy(r.pos);if(minutes>=r.next||minutes<old){goal(r);planRoute(r)}let len=moveResident(r,dt);r.hunger=Math.max(0,r.hunger-dt*.018);r.energy=Math.max(0,r.energy-dt*.012);if(r.state==='Getting food'&&len<1.5)r.hunger=Math.min(100,r.hunger+dt*.7)}greetings();if(Math.abs(minutes-lastSocial)>25){lastSocial=minutes;for(let i=0;i<residents.length;i++)for(let j=i+1;j<residents.length;j++){let a=residents[i],b=residents[j];if(a.pos.distanceTo(b.pos)<3&&Math.random()<.23)chat(a,b)}}}
 
 function save(quiet = false) {
-  const payload = { version: GAME_VERSION, savedAt: Date.now(), minutes, day, events, residents: residents.map(r => ({ name: r.name, x: r.g.position.x, z: r.g.position.z, energy: r.energy, social: r.social, hunger: r.hunger, friendships: r.friendships, memories: r.memories })) };
+  const payload = { version: GAME_VERSION, saveFormat: 2, savedAt: Date.now(), minutes, day, events, residents: residents.map(r => ({ name: r.name, x: r.pos.x, z: r.pos.z, y: r.pos.y, inside: r.inside, energy: r.energy, social: r.social, hunger: r.hunger, friendships: r.friendships, memories: r.memories })) };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(payload)); }
   catch { toast('Couldn’t save — browser storage is unavailable'); return false; }
   if (!quiet) { log('Town saved to this browser.'); toast('Town saved ✓'); }
@@ -459,11 +541,12 @@ for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEv
 
 function pick(x, y) {
   raycaster.setFromCamera(new THREE.Vector2(x / innerWidth * 2 - 1, -(y / innerHeight) * 2 + 1), camera);
-  const hits = raycaster.intersectObjects(residents.flatMap(r => r.g.children));
-  let r = hits.length ? residents.find(r => r.g.children.includes(hits[0].object)) : null;
-  if (!r) { // forgiving touch target: nearest resident within 36px
-    let best = 36;
-    for (const c of residents) { _p.set(c.g.position.x, 1.3, c.g.position.z).project(camera); if (_p.z > 1) continue; const d = Math.hypot((_p.x + 1) / 2 * innerWidth - x, (1 - _p.y) / 2 * innerHeight - y); if (d < best) { best = d; r = c; } }
+  const outdoors = residents.filter(c => c.inside < 0);
+  const hits = raycaster.intersectObjects(outdoors.map(c => c.hit), false);
+  let r = hits.length ? outdoors.find(c => c.hit === hits[0].object) : null;
+  if (!r) { // forgiving touch target: nearest resident within 44px
+    let best = 44;
+    for (const c of outdoors) { _p.set(c.g.position.x, 1.2, c.g.position.z).project(camera); if (_p.z > 1) continue; const d = Math.hypot((_p.x + 1) / 2 * innerWidth - x, (1 - _p.y) / 2 * innerHeight - y); if (d < best) { best = d; r = c; } }
   }
   if (r) openSheet(r);
 }
@@ -488,17 +571,40 @@ function setBar(id, v) { const pct = Math.round(v); $(id + 'V').textContent = pc
 let lastSheetKey = '';
 function updateSheet(force) {
   const r = selected; if (!r) return;
-  $('sActivity').innerHTML = ''; const lbl = document.createElement('span'); lbl.textContent = 'Now: '; $('sActivity').append(lbl, r.state);
+  $('sActivity').innerHTML = ''; const lbl = document.createElement('span'); lbl.textContent = 'Now: '; $('sActivity').append(lbl, activityText(r));
+  $('sGoal').innerHTML = ''; const gl = document.createElement('span'); gl.textContent = 'Goal: '; $('sGoal').append(gl, r.state + (r.site >= 0 ? ' → ' + sites[r.site][2] : ''));
+  const mood = moodOf(r); $('sMood').textContent = mood.emoji + ' ' + mood.label; $('sMood').dataset.mood = mood.key;
   setBar('sEnergy', r.energy); setBar('sHunger', r.hunger); setBar('sSocial', r.social);
-  $('sMemory').textContent = '💭 ' + (r.memories[0] || 'A fresh start');
+  const important = importantMemories(r);
+  $('sMemory').textContent = '💭 ' + (important[0]?.text || 'A fresh start');
   const key = r.id + '|' + r.memories.join('|') + '|' + JSON.stringify(r.friendships);
   if (force || key !== lastSheetKey) {
     lastSheetKey = key;
     const li = t => { const e = document.createElement('li'); e.textContent = t; return e; };
-    $('sMemList').replaceChildren(...(r.memories.length ? r.memories : ['A fresh start']).map(li));
+    $('sMemList').replaceChildren(...(important.length ? important : [{ text: 'A fresh start' }]).map(m => { const e = li(m.text); if (m.star) e.className = 'star'; return e; }));
     const fr = Object.entries(r.friendships).sort((a, b) => b[1] - a[1]).slice(0, 5);
     $('sFriendList').replaceChildren(...(fr.length ? fr.map(([n, c]) => n + ' — ' + c + (c === 1 ? ' chat' : ' chats')) : ['No friends yet']).map(li));
   }
+}
+const ACT_TEXT = { sit: 'Relaxing on a bench', sitTalk: 'Relaxing on a bench', garden: 'Tending the garden', work: 'Fixing things up', browse: 'Browsing the flowers', sketch: 'Sketching the town', watch: 'Taking in the view' };
+function activityText(r) {
+  const at = i => sites[i][2], hour = minutes / 60;
+  if (r.inside >= 0) return r.inside === r.homeSite && (hour < 7 || hour >= 22) ? 'Asleep at home' : 'Inside ' + at(r.inside);
+  if (r.talkUntil > simNow() && r.talkWith) return (r.talkKind === 'hi' ? 'Saying hi to ' : 'Chatting with ') + r.talkWith.name;
+  if (r.path.length) return 'Walking to ' + at(r.site);
+  if (r.atSpot) {
+    const p = r.pose; let t = ACT_TEXT[p];
+    if (p === 'sip') t = r.site === 4 ? 'Enjoying a pastry' : 'Sipping coffee';
+    if (p === 'read') t = r.name === 'Sarah' ? 'Taking notes for a story' : 'Reading the notices';
+    if (p === 'watch') t = r.site === 5 ? 'Watching the fountain' : 'Admiring the statue';
+    return (t || 'Hanging out') + ' · ' + at(r.site);
+  }
+  return r.site >= 0 ? 'Hanging around ' + at(r.site) : r.state;
+}
+function importantMemories(r) { // memories involving their closest friends first
+  const best = Object.entries(r.friendships).sort((a, b) => b[1] - a[1]).filter(([, c]) => c >= 2).slice(0, 2).map(([n]) => n);
+  const tagged = r.memories.map((text, i) => ({ text, i, star: best.some(n => text.includes(n)) }));
+  return tagged.sort((a, b) => (b.star - a.star) || (a.i - b.i)).slice(0, 4);
 }
 function focusOn(r) { want.target.set(r.g.position.x, 0, r.g.position.z); want.dist = Math.min(want.dist, Math.max(home.dist * .7, 22)); atHome = false; }
 function nextResident() { const r = residents[selected ? (selected.id + 1) % residents.length : 0]; openSheet(r); if (!follow) focusOn(r); }
@@ -595,6 +701,41 @@ document.addEventListener('keydown', e => {
   else if ((e.key === 'r' || e.key === 'R') && started && !settingsOpen) resetCamera();
 });
 
+/* ================= Resident visuals ================= */
+const angleTo = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
+function poseFor(r) {
+  if (r.forcePose) return r.forcePose;
+  if (r.talkUntil > simNow() && r.talkWith) return r.talkKind === 'hi' ? 'wave' : seated(r) ? 'sitTalk' : 'talk';
+  if (r.walking || !r.atSpot) return 'idle';
+  let a = r.spot.act;
+  if (r.name === 'Lily' && a === 'sit') a = 'sketch';
+  if (r.name === 'Sarah' && (a === 'watch' || a === 'browse')) a = 'read';
+  if (r.name === 'Noah' && a === 'garden') a = 'work';
+  return a;
+}
+function updateResidents(dt, ts) {
+  const alpha = clamp(acc / .12, 0, 1);
+  for (const r of residents) {
+    r.g.position.lerpVectors(r.prev, r.pos, alpha);
+    const vis = r.inside < 0; r.g.visible = vis;
+    if (!vis) { r.bubble.hide(); r.lastX = r.g.position.x; r.lastZ = r.g.position.z; continue; }
+    const moved = Math.hypot(r.g.position.x - r.lastX, r.g.position.z - r.lastZ); r.lastX = r.g.position.x; r.lastZ = r.g.position.z;
+    r.phase += Math.min(moved * 14, .9); // ~1.1 steps/s at walking pace; legs follow the ground actually covered
+    r.movingT = moved > 1e-4 ? .25 : (r.movingT || 0) - dt; r.walkingVis = r.movingT > 0; // paused/stopped walkers settle into a stance
+    r.yaw += angleTo(r.faceYaw, r.yaw) * (1 - Math.exp(-dt * 9)); r.g.rotation.y = r.yaw;
+    r.pose = poseFor(r);
+    animateCharacter(r, dt, ts);
+    // speech & thought bubbles
+    if (r.talkUntil > simNow() && r.talkWith) {
+      if (r.talkKind === 'hi') r.bubble.show('hi');
+      else { const mine = Math.floor(ts / 1.4) % 2 === (r.id < r.talkWith.id ? 0 : 1); if (mine) r.bubble.show((r.friendships[r.talkWith.name] || 0) >= 3 ? 'heart' : 'talk'); else r.bubble.hide(); }
+    } else if (r.atSpot && ts > r.thoughtAt) {
+      if (!r.bubble.visible) { const p = r.pose, mood = moodOf(r).key; const k = r.energy < 25 && seated(r) ? 'zzz' : p === 'sip' ? 'cup' : (p === 'garden' || p === 'browse') ? 'flower' : mood === 'cheerful' ? 'note' : null; if (k) r.bubble.show(k); r.thoughtAt = ts + 2.4; }
+      else { r.bubble.hide(); r.thoughtAt = ts + 7 + (r.id * 2.3) % 6; }
+    } else if (!r.atSpot) r.bubble.hide();
+  }
+}
+
 /* ================= Loop, resize, autosave ================= */
 let last = performance.now(), acc = 0, sheetTick = 0, autosaveTick = 0, lastClock = '';
 function frame(t) {
@@ -605,7 +746,8 @@ function frame(t) {
   updateCamera(delta);
   world.update(delta, t / 1000, minutes);
   const c = 'Day ' + day + ' · ' + fmtTime(minutes); if (c !== lastClock) { $('clock').textContent = c; lastClock = c; }
-  ring.visible = !!selected; if (selected) { ring.position.set(selected.g.position.x, .17, selected.g.position.z); ring.material.opacity = .65 + Math.sin(t / 250) * .25; }
+  updateResidents(delta, t / 1000);
+  ring.visible = !!selected && selected.inside < 0; if (selected) { ring.position.set(selected.g.position.x, selected.g.position.y + .17, selected.g.position.z); ring.material.opacity = .65 + Math.sin(t / 250) * .25; }
   if (selected && (sheetTick += delta) > .4) { sheetTick = 0; updateSheet(false); }
   if (started && settings.autosave && (autosaveTick += delta) > 120) { autosaveTick = 0; save(true); }
   renderer.render(scene, camera);
@@ -638,11 +780,28 @@ requestAnimationFrame(frame);
 window.__tlw = {
   version: GAME_VERSION, cam, want, LIMITS, view,
   get home() { return home; }, get state() { return { minutes, day, started, paused, speed, follow, selected: selected?.name ?? null, events: events.slice(), atHome }; },
-  residents: () => residents.map(r => ({ name: r.name, x: r.g.position.x, z: r.g.position.z, energy: r.energy, hunger: r.hunger, social: r.social })),
-  screenOf(i) { const r = residents[i]; _p.set(r.g.position.x, 1.3, r.g.position.z).project(camera); return { x: (_p.x + 1) / 2 * innerWidth, y: (1 - _p.y) / 2 * innerHeight }; },
+  residents: () => residents.map(r => ({ name: r.name, x: r.pos.x, z: r.pos.z, energy: r.energy, hunger: r.hunger, social: r.social, inside: r.inside, pose: r.pose, walking: r.walking, visible: r.g.visible, yaw: r.yaw, faceYaw: r.faceYaw, talkUntil: r.talkUntil, talkWith: r.talkWith?.name ?? null, bubble: r.bubble.visible ? r.bubble.kind : null, site: r.site, atSpot: r.atSpot, pathLen: r.path.length - r.pi, mood: moodOf(r).label, friendships: { ...r.friendships }, memories: r.memories.slice() })),
+  screenOf(i) { const r = residents[i]; _p.set(r.g.position.x, r.g.position.y + 1.2, r.g.position.z).project(camera); return { x: (_p.x + 1) / 2 * innerWidth, y: (1 - _p.y) / 2 * innerHeight }; },
+  footprints: FOOTPRINTS.map(f => ({ site: f.site, r: f.r, porch: !!f.porch })),
   townBounds() { return projectedBounds(); }, usableRect: () => usableRect(false), settings,
   world: world.stats, sites: sites.map(s => s.slice(0, 3)), renderInfo: () => ({ ...lastRenderInfo }), worldState: world.state,
-  debug: { setMinutes(m) { minutes = m; } }, // test hook: jump the clock (e.g. to check night lighting)
+  debug: { // test hooks
+    setMinutes(m) { minutes = m; },
+    // run the simulation synchronously (as at high speed) and report anyone visible inside a building or off the map
+    run(mins, check = true) { let bad = [], n = Math.round(mins / .12); for (let k = 0; k < n; k++) { step(.12); if (check) for (const r of residents) { if (!Number.isFinite(r.pos.x + r.pos.z)) bad.push(r.name + ' NaN'); else if (r.inside < 0 && insideFootprint(r.pos.x, r.pos.z)) bad.push(r.name + ' inside @' + r.pos.x.toFixed(1) + ',' + r.pos.z.toFixed(1)); else if (Math.abs(r.pos.x) > 31.5 || Math.abs(r.pos.z) > 31.5) bad.push(r.name + ' off map'); } } return bad.slice(0, 10); },
+    route(i, site) { const r = residents[i], S = nav.sites[site]; return nav.path(r.pos, S.E).map(p => [p.x, p.z]); },
+    allRoutes() { const out = []; for (let a = 0; a < 9; a++) for (let b = 0; b < 9; b++) { if (a === b) continue; const e = nav.node(nav.sites[a].E); for (const t of [nav.sites[b].E, ...nav.sites[b].spots.map(sp => sp.node)]) out.push({ a, b, pts: [[e.x, e.z], ...nav.path(e, t).map(p => [p.x, p.z])] }); } return out; },
+    edges() { const out = []; nav.adjacency.forEach((l, i) => l.forEach(([j]) => { if (i < j) out.push([nav.nodes[i].x, nav.nodes[i].z, nav.nodes[j].x, nav.nodes[j].z]); })); return out; },
+    segmentBlocked,
+    placeNear(i, j) { const a = residents[i], b = residents[j]; placeAt(a, -7.6, 5.55); placeAt(b, -6.4, 5.55); a.next = b.next = minutes + 60; },
+    chat(i, j) { chat(residents[i], residents[j]); },
+    characters() { return residents.map(r => { const b = new THREE.Box3().setFromObject(r.rig.body); let meshes = 0, tris = 0, sig = 0; r.rig.body.traverse(o => { if (o.isMesh) { meshes++; const c = o.geometry.attributes.color; tris += o.geometry.attributes.position.count / 3; for (let k = 0; k < c.count; k += 7) sig = (sig * 31 + Math.round(c.getX(k) * 255) * 7 + Math.round(c.getY(k) * 255) * 13 + Math.round(c.getZ(k) * 255)) % 1e9; } }); return { name: r.name, meshes, tris, sig, height: b.max.y - b.min.y, legL: r.rig.legL.rotation.x, armR: r.rig.armR.rotation.x, bodyY: r.rig.body.position.y }; }); },
+    place(i, x, z) { const r = residents[i]; placeAt(r, x, z); r.next = minutes + 999; },
+    wake() { residents.forEach(r => { r.next = 0; r.forcePose = null; }); },
+    lineup(x0, z, dx, yaw) { residents.forEach((r, i) => { placeAt(r, x0 + i * dx, z); r.faceYaw = r.yaw = yaw; r.next = minutes + 999; }); },
+    pose(i, p, walking) { const r = residents[i]; r.forcePose = p; r.walking = !!walking; },
+    walkTo(i, site) { const r = residents[i]; r.state = 'Out exploring'; r.dest = [sites[site][0], sites[site][1]]; r.next = minutes + 500; planRoute(r); },
+  },
 };
 </script>
 </body>

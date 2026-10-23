@@ -27,19 +27,29 @@ Current version: **v0.2.0** (shown on the title screen and in Settings).
 ## Settings
 Stored separately from the town save (`tlw-settings` in localStorage): camera sensitivity, shadows, autosave (every 2 minutes and when the app is backgrounded), and gesture hints. *Delete saved town* replaces the old HUD Reset button.
 
+## Residents
+Eight stylized low-poly people, each with their own face, hairstyle, outfit and props: Oliver the baker (chef's toque, apron), Emma the florist (pastels, flower in her hair), Sarah the journalist (blazer, glasses, satchel, notepad), Marcus the mayor (suit and tie), Mia the café owner (bun, apron, coffee cup), Noah the mechanic (cap, overalls, wrench), Lily the artist (beret, paint-spattered smock, brush) and Ethan (hoodie, headphones, jeans).
+
+- **Animation:** walk cycle driven by the ground actually covered (correct at 1×/3×/10×), breathing idle with look-arounds, smooth turning, and activity poses — sitting, sipping coffee, gardening, fixing things, browsing flowers, reading/taking notes, sketching, watching, talking and waving.
+- **Navigation:** a lightweight graph along the sidewalks, crosswalks and garden paths. Residents walk to real front doors and go inside (they disappear indoors and reappear at the door), or to outdoor spots: café and bakery patio seats, park benches, flower stands, gardens, the fountain and the statue. Routes never pass through buildings.
+- **Social life:** passers-by stop to say hi and wave; when two residents chat (the same v0.1 rule that builds friendships and memories) they pause, face each other and show alternating speech bubbles (a heart for close friends). Thought bubbles hint at what they're enjoying.
+- **Unchanged rules:** needs, schedules (`goal()`), walking speed, relationships and memories work exactly as in v0.1; the new layer only decides *how* a resident reaches the destination their schedule chose.
+- **Detail sheet:** mood, what they're doing now, their current goal and destination, needs, and important memories (those involving their closest friends first).
+
 ## Project layout
 - `index.html` — UI, camera/touch controls, simulation, saves.
 - `src/world.js` — the procedural Willowbrook scenery, lighting, sky and ambient animation. Everything is generated in code (no downloaded models or AI-generated assets).
+- `src/residents.js` — character models and animation, the sidewalk navigation graph, building footprints, speech bubbles and moods.
 - `tests/` — automated checks.
 
 ### Scene performance notes
-Static scenery is baked into a few merged, vertex-coloured, flat-shaded meshes (buildings/props, foliage with a GPU sway shader, glowing windows/lamps), so the whole town draws in roughly 35–40 draw calls and ~100k triangles. Night lighting uses emissive windows and additive light pools rather than real point lights. Shadows can be turned off in Settings for battery life.
+Static scenery is baked into a few merged, vertex-coloured, flat-shaded meshes (buildings/props, foliage with a GPU sway shader, glowing windows/lamps), so the whole town draws in roughly 35–40 draw calls and ~100k triangles. Each resident is 6 small merged meshes (body, head, arms, legs) under 3k triangles. Night lighting uses emissive windows and additive light pools rather than real point lights. Shadows can be turned off in Settings for battery life.
 
 ## State and limits
-- Saves are stored in **localStorage on the current device** under the same `tlw-save` key and format as v0.1 (v0.2 adds `version` and `savedAt` fields); there is no cloud sync. v0.1 saves load unchanged.
+- Saves are stored in **localStorage on the current device** under the same `tlw-save` key and format as v0.1 (v0.2 adds `version`, `savedAt`, `saveFormat: 2` and each resident's `inside`/`y`); there is no cloud sync. v0.1 saves still load: anyone saved standing inside a building is moved to that building's door and placed indoors.
 - The simulation runs in the browser and pauses when the tab is closed.
 - Residents use lightweight procedural behaviors rather than paid AI APIs.
-- This is an early playable slice; full navigation/pathfinding, interior spaces and complex relationships are not implemented. Residents still walk in straight lines (through fences and gardens) to the same destination points as v0.1.
+- This is an early playable slice; interiors and complex relationships are not implemented. Residents don't avoid each other on the sidewalk (they can briefly overlap).
 - Mobile device QA and visual playtesting are still needed.
 
 ## Development checks

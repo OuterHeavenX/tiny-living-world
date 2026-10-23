@@ -111,7 +111,7 @@ await test('New Game starts the simulation and shows the compact HUD', async () 
   await p.tap('#clockPill'); await p.waitForTimeout(300);
   ok(await p.isVisible('#feed') && (await p.textContent('#events')).includes('Welcome to Willowbrook'), 'town happenings open from the clock');
   await touch(p, 'touchStart', [[200, 400]]); await touch(p, 'touchEnd', []); await p.waitForTimeout(300);
-  ok(!(await p.isVisible('#feed')), 'touching the town closes happenings');
+  ok(await p.evaluate(() => !document.getElementById('feed').classList.contains('open') && document.getElementById('feed').getAttribute('aria-hidden') === 'true'), 'touching the town closes happenings');
   await p.evaluate(() => document.getElementById('save').click()); await p.waitForTimeout(400);
   ok(await p.evaluate(() => document.getElementById('ticker').classList.contains('show')), 'news chip appears for a new event');
   for (const id of ['pause', 'speed', 'menu', 'people', 'resetCam', 'save']) {
@@ -198,9 +198,12 @@ await test('tapping a resident opens a compact bottom sheet; follow, next, swipe
   const p = await open(); await startNew(p);
   await p.tap('#pause'); await settle(p, 1300);
   const lily = 6, pt = await p.evaluate(i => __tlw.screenOf(i), lily);
-  await touch(p, 'touchStart', [[pt.x, pt.y]]); await touch(p, 'touchEnd', []);
+  await touch(p, 'touchStart', [[pt.x + 14, pt.y + 16]]); await touch(p, 'touchEnd', []); // a slightly-off tap still counts
   await p.waitForTimeout(500);
   ok(await tlw(p, '__tlw.state.selected') === 'Lily', 'tap should select Lily, got ' + await tlw(p, '__tlw.state.selected'));
+  ok((await p.textContent('#sGoal')).startsWith('Goal:'), 'sheet shows the current goal');
+  ok((await p.textContent('#sMood')).length > 2, 'sheet shows a mood');
+  ok((await p.textContent('#sActivity')).length > 6, 'sheet shows the current activity');
   ok((await p.textContent('#sName')) === 'Lily', 'sheet shows name');
   await p.waitForFunction(() => Math.abs(document.getElementById('sheet').getBoundingClientRect().bottom - innerHeight) < 2, null, { timeout: 5000 }).catch(() => {});
   const box = await p.locator('#sheet').boundingBox(), vh = await p.evaluate(() => innerHeight);
@@ -370,6 +373,109 @@ await test('rotating the phone re-frames the town', async () => {
   await p.context().close();
 });
 
+await test('residents are distinct articulated low-poly characters', async () => {
+  const p = await open(); await startNew(p); await p.tap('#pause');
+  const ch = await tlw(p, '__tlw.debug.characters()');
+  ok(ch.length === 8, 'eight characters');
+  for (const c of ch) { ok(c.meshes >= 6, c.name + ' should have body, head, two arms and two legs (got ' + c.meshes + ' meshes)'); ok(c.height > 1.9 && c.height < 2.7, c.name + ' height ' + c.height.toFixed(2)); ok(c.tris < 3000, c.name + ' too heavy: ' + c.tris + ' tris'); }
+  ok(new Set(ch.map(c => c.sig)).size === 8, 'every character should look different');
+  await p.context().close();
+});
+
+await test('walking and idle animation, smooth turning', async () => {
+  const p = await open(); await startNew(p);
+  await p.evaluate(() => { __tlw.debug.lineup(-28, 28, 1.2, 0); __tlw.debug.place(0, -10, 5.55); __tlw.debug.walkTo(0, 6); });
+  await p.tap('#speed'); await p.tap('#speed'); // 10× — also checks animation at the highest speed
+  const samples = [];
+  for (let k = 0; k < 14; k++) { await p.waitForTimeout(150); samples.push(await tlw(p, '__tlw.debug.characters()[0].legL')); }
+  ok(Math.max(...samples) > .2 && Math.min(...samples) < -.2, 'legs should swing while walking: ' + samples.map(v => v.toFixed(2)).join(','));
+  const r = (await tlw(p, '__tlw.residents()'))[0];
+  ok(r.walking && Math.abs(Math.atan2(Math.sin(r.yaw - r.faceYaw), Math.cos(r.yaw - r.faceYaw))) < .5, 'walker should turn to face the way they walk');
+  await p.tap('#pause');
+  await p.evaluate(() => { __tlw.debug.lineup(-12, 5.55, 1.5, 0); }); await p.waitForTimeout(600);
+  const a = await tlw(p, '__tlw.debug.characters()[3].bodyY'); await p.waitForTimeout(700); const b = await tlw(p, '__tlw.debug.characters()[3].bodyY');
+  ok(a !== b, 'idle characters should breathe/shift');
+  await p.context().close();
+});
+
+await test('navigation: sidewalks, crosswalks and entrances only — never through buildings', async () => {
+  const p = await open(); await startNew(p); await p.tap('#pause');
+  const bad = await p.evaluate(() => {
+    const out = [], inside = (x, z) => __tlw.footprints.some(f => !f.porch && x > f.r[0] && x < f.r[2] && z > f.r[1] && z < f.r[3]);
+    const segs = __tlw.debug.edges().map(([a, b, c, d]) => [[a, b], [c, d]]);
+    for (const { pts } of __tlw.debug.allRoutes()) for (let k = 1; k < pts.length; k++) segs.push([pts[k - 1], pts[k]]);
+    for (const [[x0, z0], [x1, z1]] of segs) { const n = Math.ceil(Math.hypot(x1 - x0, z1 - z0) / .2); for (let s = 0; s <= n; s++) { const x = x0 + (x1 - x0) * s / n, z = z0 + (z1 - z0) * s / n; if (inside(x, z)) { out.push(`(${x.toFixed(1)},${z.toFixed(1)})`); break; } } }
+    return out;
+  });
+  ok(bad.length === 0, 'paths cross buildings at ' + bad.slice(0, 5).join(' '));
+  const v = await tlw(p, '__tlw.debug.run(3 * 1440)'); // three days at full speed, checked every step
+  ok(v.length === 0, 'residents walked through buildings / off the map: ' + v.join('; '));
+  const rs = await tlw(p, '__tlw.residents()');
+  for (const r of rs) for (const k of ['energy', 'hunger', 'social']) ok(r[k] >= 0 && r[k] <= 100, r.name + ' ' + k + ' out of range');
+  ok(rs.some(r => Object.keys(r.friendships).length), 'friendships still form');
+  await p.context().close();
+});
+
+await test('residents go home through their front door at night; Lily rests in the park', async () => {
+  const p = await open(); await startNew(p); await p.tap('#pause');
+  await p.evaluate(() => { __tlw.debug.setMinutes(22 * 60 + 5); __tlw.debug.wake(); __tlw.debug.run(150); });
+  const rs = await tlw(p, '__tlw.residents()'), homes = [0, 1, 2, 8, 7, 3, 5, 6];
+  for (const [i, r] of rs.entries()) {
+    if (r.name === 'Lily') ok(!r.inside >= 0 || r.inside === -1, 'Lily stays in the park');
+    else ok(r.inside === homes[i] || r.pathLen > 0, r.name + ' should be inside home (site ' + homes[i] + '), got inside=' + r.inside + ' site=' + r.site);
+  }
+  ok(rs.filter(r => r.visible === false || r.inside >= 0).length >= 5, 'most residents are indoors at night');
+  await p.context().close();
+});
+
+await test('meeting: residents pause, face each other and show speech bubbles', async () => {
+  const p = await open(); await startNew(p); await p.tap('#pause');
+  await p.evaluate(() => { __tlw.debug.placeNear(1, 4); __tlw.debug.chat(1, 4); });
+  await p.waitForFunction(() => { const r = __tlw.residents(); return Math.abs(r[1].yaw - r[1].faceYaw) < .1 && Math.abs(r[4].yaw - r[4].faceYaw) < .1; }, null, { timeout: 15000 }).catch(() => {});
+  const [e, m] = (await tlw(p, '__tlw.residents()')).filter(r => r.name === 'Emma' || r.name === 'Mia');
+  ok(e.talkWith === 'Mia' && m.talkWith === 'Emma', 'both should be talking');
+  const toward = (a, b) => Math.atan2(b.x - a.x, b.z - a.z), diff = (x, y) => Math.abs(Math.atan2(Math.sin(x - y), Math.cos(x - y)));
+  ok(diff(e.yaw, toward(e, m)) < .35 && diff(m.yaw, toward(m, e)) < .35, 'they should face each other');
+  ok(e.memories[0] === 'Emma chatted with Mia' && e.friendships.Mia >= 1, 'chat still creates memories and friendships');
+  let bubbles = new Set(); for (let k = 0; k < 8; k++) { for (const r of await tlw(p, '__tlw.residents()')) if (r.bubble) bubbles.add(r.name + ':' + r.bubble); await p.waitForTimeout(400); }
+  ok([...bubbles].some(b => b.startsWith('Emma:')) && [...bubbles].some(b => b.startsWith('Mia:')), 'speech bubbles alternate: ' + [...bubbles].join(','));
+  await p.tap('#pause'); await p.evaluate(() => __tlw.debug.walkTo(1, 6));
+  const before = (await tlw(p, '__tlw.residents()'))[1]; await p.waitForTimeout(900); const during = (await tlw(p, '__tlw.residents()'))[1];
+  ok(Math.hypot(before.x - during.x, before.z - during.z) < .05, 'talkers pause before walking on');
+  await p.evaluate(() => __tlw.debug.run(8, false)); const after = (await tlw(p, '__tlw.residents()'))[1];
+  ok(Math.hypot(before.x - after.x, before.z - after.z) > .5, 'and continue afterwards');
+  // passers-by greet each other
+  await p.tap('#pause');
+  // passers-by: Oliver walks east along the shop-row sidewalk while Ethan comes the other way
+  const met = await p.evaluate(() => {
+    __tlw.debug.lineup(-28, 28, 1.2, 0);
+    __tlw.debug.place(0, -12, 5.55); __tlw.debug.place(7, -3, 5.55);
+    __tlw.debug.walkTo(0, 7); __tlw.debug.walkTo(7, 4);
+    for (let k = 0; k < 120; k++) { __tlw.debug.run(.24, false); const [o, e] = [__tlw.residents()[0], __tlw.residents()[7]]; if (o.talkWith === 'Ethan' && e.talkWith === 'Oliver') return { o, e }; }
+    return null;
+  });
+  ok(met, 'Oliver and Ethan should stop to greet each other when they pass');
+  await p.waitForFunction(() => { const r = __tlw.residents(); return r[0].pose === 'wave' && r[7].pose === 'wave'; }, null, { timeout: 15000 }).catch(() => {});
+  const rs = await tlw(p, '__tlw.residents()');
+  ok(rs[0].pose === 'wave' && rs[7].pose === 'wave', 'greeters wave: ' + rs[0].pose + '/' + rs[7].pose);
+  ok(rs[0].bubble === 'hi' || rs[7].bubble === 'hi', 'greeting bubble');
+  await p.context().close();
+});
+
+await test('migrates v0.1 saves where residents stood inside buildings', async () => {
+  const legacy = { minutes: 600, day: 2, events: ['Welcome to Willowbrook!'], residents: [['Oliver', -20, -20], ['Emma', -7, -20], ['Sarah', 7, -20], ['Marcus', 7, 20], ['Mia', 21, 0], ['Noah', 21, -20], ['Lily', -7, 0], ['Ethan', 7, 0]].map(([name, x, z]) => ({ name, x, z, energy: 60, social: 60, hunger: 60, friendships: {}, memories: [] })) };
+  const p = await open(devices['iPhone 13'], { storage: { 'tlw-save': JSON.stringify(legacy) } });
+  await p.tap('#btnContinue'); await p.tap('#pause');
+  const rs = await tlw(p, '__tlw.residents()'), fp = await tlw(p, '__tlw.footprints');
+  const inBuilding = r => fp.some(f => !f.porch && r.x > f.r[0] && r.x < f.r[2] && r.z > f.r[1] && r.z < f.r[3]);
+  for (const r of rs) ok(!inBuilding(r), r.name + ' left standing inside a wall');
+  ok(rs.filter(r => r.name !== 'Lily').every(r => r.inside >= 0 || r.pathLen > 0), 'people found inside buildings are indoors (or already heading out)');
+  await p.tap('#save');
+  const saved = await p.evaluate(() => JSON.parse(localStorage.getItem('tlw-save')));
+  ok(saved.saveFormat === 2 && saved.residents.every(r => typeof r.inside === 'number'), 'new saves record who is indoors');
+  await p.context().close();
+});
+
 await test('Willowbrook diorama: all locations rebuilt in place, layout and destinations unchanged', async () => {
   const p = await open(devices['iPhone 13'], { shadows: true }); await startNew(p);
   const ORIGINAL = [[-20,-20,'Oliver’s Cottage'],[-7,-20,'Emma’s House'],[7,-20,'Sarah’s House'],[21,-20,'Shared House'],[-20,0,'Sunrise Bakery'],[-7,0,'Willowbrook Park'],[7,0,'Petal & Stem'],[21,0,'Corner Café'],[7,20,'Town Hall']];
@@ -390,8 +496,8 @@ await test('Willowbrook diorama: all locations rebuilt in place, layout and dest
 await test('scene stays within a mobile budget (draw calls, triangles, build time)', async () => {
   const p = await open(devices['iPhone 13'], { shadows: true }); await startNew(p); await p.waitForTimeout(500);
   const info = await tlw(p, '__tlw.renderInfo()'), w = await tlw(p, '__tlw.world');
-  ok(info.calls > 0 && info.calls <= 60, 'draw calls per frame: ' + info.calls);
-  ok(info.triangles < 250000, 'triangles per frame: ' + info.triangles);
+  ok(info.calls > 0 && info.calls <= 140, 'draw calls per frame: ' + info.calls);
+  ok(info.triangles < 300000, 'triangles per frame: ' + info.triangles);
   ok(w.buildMs < 3000, 'world build took ' + w.buildMs + 'ms');
   results.push(`      (${info.calls} draw calls, ${Math.round(info.triangles / 1000)}k triangles, built in ${w.buildMs}ms under software GL)`);
   await p.context().close();

@@ -9,7 +9,8 @@ new vm.SourceTextModule(m[1], { identifier: 'index.html#module' }); // throws on
 const v = html.match(/const GAME_VERSION = '([^']+)'/)?.[1];
 if (v !== pkg.version) throw new Error(`GAME_VERSION ${v} != package.json ${pkg.version}`);
 for (const id of ['btnContinue', 'btnNew', 'btnSettings', 'resetCam', 'sheet', 'settings']) if (!html.includes(`id="${id}"`)) throw new Error('missing #' + id);
-const worldSrc = fs.readFileSync(path.join(root, 'src/world.js'), 'utf8');
-new vm.SourceTextModule(worldSrc, { identifier: 'src/world.js' });
-if (!html.includes("from './src/world.js'")) throw new Error('index.html does not import src/world.js');
-console.log(`  ✓ index.html and src/world.js parse; version ${v}`);
+for (const f of ['src/world.js', 'src/residents.js']) {
+  new vm.SourceTextModule(fs.readFileSync(path.join(root, f), 'utf8'), { identifier: f }); // throws on syntax errors
+  if (!html.includes(`from './${f}'`)) throw new Error('index.html does not import ' + f);
+}
+console.log(`  ✓ index.html, src/world.js and src/residents.js parse; version ${v}`);
