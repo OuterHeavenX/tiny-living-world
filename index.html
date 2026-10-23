@@ -113,6 +113,7 @@ body.sheet-open #sheet{transform:translateY(0);visibility:visible;transition:tra
 .stack{display:flex;flex-direction:column;gap:10px}
 .stack button{min-height:52px;font-size:16px;border-radius:14px}
 #saveInfo{margin:0 0 2px;font-size:12.5px;color:var(--muted);min-height:1em}
+#saveInfo.warn{color:#ffd29a}
 .ver{margin:14px 0 0;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 #settings{background:rgba(10,20,20,.45);justify-content:flex-end}
 @media (min-height:560px) and (min-width:600px){#settings{justify-content:center}}
@@ -123,6 +124,8 @@ body.sheet-open #sheet{transform:translateY(0);visibility:visible;transition:tra
 .row label{flex:1}
 .row small{display:block;color:var(--muted);font-size:12px}
 input[type=range]{width:46%;accent-color:var(--accent);height:32px}
+select{font:inherit;font-weight:700;min-height:40px;border-radius:10px;border:1px solid var(--line);background:rgba(255,255,255,.12);color:#fff;padding:0 10px}
+select option{color:#000}
 .switch{appearance:none;-webkit-appearance:none;width:50px;height:30px;border-radius:15px;background:rgba(255,255,255,.2);position:relative;flex:none;cursor:pointer;transition:background .2s;margin:0}
 .switch::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:transform .2s}
 .switch:checked{background:#6fbf73}
@@ -207,6 +210,7 @@ body:not(.in-game) .ingame-only{display:none}
   <div class="card glass">
     <div class="set-head"><h2 id="setTitle">Settings</h2><button id="setClose" class="ghost" aria-label="Close settings">✕</button></div>
     <div class="row"><label for="optSens">Camera sensitivity<small>How fast dragging rotates the view</small></label><input id="optSens" type="range" min="0.5" max="2" step="0.1"></div>
+    <div class="row"><label for="optQuality">Graphics<small id="qualityNote">Auto adjusts to keep play smooth</small></label><select id="optQuality"><option value="auto">Auto</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></div>
     <div class="row"><label for="optShadows">Shadows<small>Turn off for better battery life</small></label><input id="optShadows" class="switch" type="checkbox"></div>
     <div class="row"><label for="optAutosave">Autosave<small>Every 2 minutes and when you leave</small></label><input id="optAutosave" class="switch" type="checkbox"></div>
     <div class="row"><label for="optHints">Gesture hints<small>Show controls tip when play starts</small></label><input id="optHints" class="switch" type="checkbox"></div>
@@ -232,7 +236,7 @@ const readJSON = k => { try { return JSON.parse(localStorage.getItem(k) || 'null
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 /* ================= Settings ================= */
-const DEFAULT_SETTINGS = { sensitivity: 1, shadows: true, autosave: true, hints: true };
+const DEFAULT_SETTINGS = { sensitivity: 1, shadows: true, autosave: true, hints: true, quality: 'auto' };
 const settings = { ...DEFAULT_SETTINGS, ...(readJSON(SETTINGS_KEY) || {}) };
 function writeSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch {} }
 
@@ -241,7 +245,7 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(48, innerWidth / innerHeight, .1, 500);
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
 renderer.setClearColor(0x000000, 0);
-renderer.setSize(innerWidth, innerHeight); renderer.setPixelRatio(Math.min(devicePixelRatio, 1.7));
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5)); renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
 $('scene').appendChild(renderer.domElement);
@@ -251,6 +255,29 @@ const skin = mat(0xffcfad);
 const sites = [[-20,-20,'Oliver’s Cottage',0xbad2ab],[-7,-20,'Emma’s House',0xe8bbc5],[7,-20,'Sarah’s House',0xb0cbe3],[21,-20,'Shared House',0xc6d4a8],[-20,0,'Sunrise Bakery',0xe8b37e],[-7,0,'Willowbrook Park',0x78b883],[7,0,'Petal & Stem',0xd5abc8],[21,0,'Corner Café',0xc9a991],[7,20,'Town Hall',0xa8b8dc]];
 const world = buildWorld(scene, sites, { shadows: settings.shadows, skyEl: $('scene'), shadowMapSize: 2048 });
 const sun = world.sun;
+/* ---------- graphics quality (adaptive) ---------- */
+const QUALITY = { high: { pr: 2, shadow: 2048 }, medium: { pr: 1.5, shadow: 1024 }, low: { pr: 1, shadow: 0 } };
+const touchDevice = matchMedia('(pointer: coarse)').matches;
+let qLevel = 'high';
+function applyQuality(level) {
+  qLevel = level; const q = QUALITY[level];
+  renderer.setPixelRatio(Math.min(devicePixelRatio, q.pr)); renderer.setSize(innerWidth, innerHeight);
+  if (q.shadow && sun.shadow.mapSize.x !== q.shadow) { sun.shadow.mapSize.set(q.shadow, q.shadow); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
+  sun.castShadow = settings.shadows && q.shadow > 0;
+}
+const startQuality = () => settings.quality !== 'auto' ? settings.quality : touchDevice ? 'medium' : 'high';
+applyQuality(startQuality());
+// Auto mode: measure real frame rate while playing; step quality down if it stays under ~26 fps.
+const perf = { frames: 0, time: 0, fps: 0, playTime: 0, downgrades: 0 };
+function watchPerformance(realDt) {
+  if (!started || document.hidden || realDt <= 0 || realDt > 1) return;
+  perf.playTime += realDt; if (perf.playTime < 3) return; // let shaders warm up
+  perf.frames++; perf.time += realDt;
+  if (perf.time >= 4) {
+    perf.fps = perf.frames / perf.time; perf.frames = 0; perf.time = 0;
+    if (settings.quality === 'auto' && perf.fps < 26 && qLevel !== 'low') { applyQuality(qLevel === 'high' ? 'medium' : 'low'); perf.downgrades++; }
+  }
+}
 
 /* ================= Residents ================= */
 // name, job, (v0.1 colour), home x, home z — homes and schedules are unchanged from v0.1
@@ -284,9 +311,31 @@ let minutes = 480, day = 1, speed = 1, paused = false, selected = null, follow =
 let started = false;        // simulation running (not on title)
 let sessionStarted = false; // player has entered the game this page session
 
+// Read the save defensively: unreadable data is backed up (never silently discarded) and every value is range-checked.
+const SAVE_BACKUP_KEY = 'tlw-save-prev', SAVE_CORRUPT_KEY = 'tlw-save-unreadable';
+let saveProblem = null;
+const num = (v, d, lo, hi) => (typeof v === 'number' && Number.isFinite(v)) ? clamp(v, lo, hi) : d;
+function readSave() {
+  let raw = null; try { raw = localStorage.getItem(SAVE_KEY); } catch { return null; }
+  if (!raw) return null;
+  let s = null; try { s = JSON.parse(raw); } catch {}
+  if (!s || typeof s !== 'object' || Array.isArray(s)) { saveProblem = 'unreadable'; try { localStorage.setItem(SAVE_CORRUPT_KEY, raw); localStorage.removeItem(SAVE_KEY); } catch {} return null; }
+  return s;
+}
+function sanitizeSave(s) {
+  return { ...s, minutes: num(s.minutes, 480, 0, 1439.9), day: Math.floor(num(s.day, 1, 1, 1e6)),
+    events: Array.isArray(s.events) ? s.events.filter(e => typeof e === 'string').slice(0, 25) : ['Welcome to Willowbrook!'],
+    residents: Array.isArray(s.residents) ? s.residents.filter(v => v && typeof v === 'object').map(v => ({ ...v,
+      x: num(v.x, NaN, -31.5, 31.5), z: num(v.z, NaN, -31.5, 31.5), y: num(v.y, 0, 0, 2), inside: Number.isInteger(v.inside) && v.inside >= -1 && v.inside < sites.length ? v.inside : undefined,
+      energy: num(v.energy, 75, 0, 100), social: num(v.social, 60, 0, 100), hunger: num(v.hunger, 75, 0, 100),
+      friendships: v.friendships && typeof v.friendships === 'object' ? Object.fromEntries(Object.entries(v.friendships).filter(([n, c]) => data.some(d => d[0] === n) && Number.isFinite(c) && c >= 0)) : {},
+      memories: Array.isArray(v.memories) ? v.memories.filter(m => typeof m === 'string').slice(0, 6) : [] })) : [] };
+}
 function applySave(saved) {
+  if (saved) saved = sanitizeSave(saved);
   minutes = saved?.minutes ?? 480; day = saved?.day ?? 1; events = saved?.events ?? ['Welcome to Willowbrook!'];
   if (saved?.residents) saved.residents.forEach((v, i) => { const r = residents[i]; if (!r || v.name !== r.name) return;
+    if (!Number.isFinite(v.x) || !Number.isFinite(v.z)) { v.x = r.home[0]; v.z = r.home[1]; v.inside = undefined; }
     if (saved.saveFormat >= 2 && typeof v.inside === 'number') { placeAt(r, v.x, v.z, v.y || 0); if (v.inside >= 0) { const e = nav.node(nav.sites[v.inside].E); r.pos.set(e.x, e.y, e.z); r.prev.copy(r.pos); r.inside = v.inside; } else if (insideFootprint(v.x, v.z)) placeAt(r, v.x, v.z); }
     else placeAt(r, v.x, v.z); // v0.1 save: migrate people standing inside buildings to the door
     r.energy = v.energy; r.social = v.social; r.hunger = v.hunger; r.friendships = v.friendships || {}; r.memories = v.memories || []; });
@@ -365,12 +414,17 @@ function step(dt){let old=minutes;minutes+=dt;if(minutes>=1440){minutes-=1440;da
 
 function save(quiet = false) {
   const payload = { version: GAME_VERSION, saveFormat: 2, savedAt: Date.now(), minutes, day, events, residents: residents.map(r => ({ name: r.name, x: r.pos.x, z: r.pos.z, y: r.pos.y, inside: r.inside, energy: r.energy, social: r.social, hunger: r.hunger, friendships: r.friendships, memories: r.memories })) };
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify(payload)); }
-  catch { toast('Couldn’t save — browser storage is unavailable'); return false; }
+  const json = JSON.stringify(payload);
+  try {
+    const prev = localStorage.getItem(SAVE_KEY); if (prev) localStorage.setItem(SAVE_BACKUP_KEY, prev); // one-slot backup
+    localStorage.setItem(SAVE_KEY, json);
+    if (localStorage.getItem(SAVE_KEY) !== json) throw new Error('verify'); // read back: never report a save that didn't stick
+  } catch { toast('Couldn’t save — browser storage is unavailable or full'); return false; }
+  saveProblem = null;
   if (!quiet) { log('Town saved to this browser.'); toast('Town saved ✓'); }
   return true;
 }
-applySave(readJSON(SAVE_KEY));
+applySave(readSave());
 
 /* ================= Camera ================= */
 const V3 = THREE.Vector3;
@@ -644,8 +698,9 @@ let settingsOpen = false, hintTimer = 0;
 function fmtTime(m) { return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(Math.floor(m % 60)).padStart(2, '0'); }
 function refreshTitle() {
   const s = readJSON(SAVE_KEY), canContinue = sessionStarted || !!s;
+  $('saveInfo').classList.toggle('warn', !!saveProblem && !s);
   $('btnContinue').disabled = !canContinue;
-  let info = 'No saved town yet — start a new game';
+  let info = saveProblem && !s ? 'Your saved town couldn’t be read — a backup copy was kept on this device' : 'No saved town yet — start a new game';
   if (sessionStarted) info = 'Resume Day ' + day + ' · ' + fmtTime(minutes);
   else if (s) { info = 'Saved town · Day ' + (s.day ?? 1) + ' · ' + fmtTime(s.minutes ?? 480); if (s.savedAt) info += ' · ' + new Date(s.savedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); }
   $('saveInfo').textContent = info;
@@ -676,6 +731,7 @@ $('btnSettings').onclick = () => openSettings();
 
 function openSettings() {
   settingsOpen = true;
+  $('optQuality').value = settings.quality; $('qualityNote').textContent = settings.quality === 'auto' ? 'Auto adjusts to keep play smooth (now: ' + qLevel + ')' : 'Fixed quality';
   $('optSens').value = settings.sensitivity; $('optShadows').checked = settings.shadows; $('optAutosave').checked = settings.autosave; $('optHints').checked = settings.hints;
   $('setDelete').disabled = !readJSON(SAVE_KEY);
   $('settings').hidden = false; $('setClose').focus({ preventScroll: true });
@@ -684,7 +740,8 @@ function closeSettings() { settingsOpen = false; $('settings').hidden = true; if
 $('setClose').onclick = closeSettings;
 $('settings').addEventListener('click', e => { if (e.target === $('settings')) closeSettings(); });
 $('optSens').oninput = e => { settings.sensitivity = +e.target.value; writeSettings(); };
-$('optShadows').onchange = e => { settings.shadows = e.target.checked; sun.castShadow = settings.shadows; writeSettings(); };
+$('optShadows').onchange = e => { settings.shadows = e.target.checked; applyQuality(qLevel); writeSettings(); };
+$('optQuality').onchange = e => { settings.quality = e.target.value; perf.playTime = 0; perf.frames = perf.time = 0; applyQuality(startQuality()); writeSettings(); };
 $('optAutosave').onchange = e => { settings.autosave = e.target.checked; writeSettings(); };
 $('optHints').onchange = e => { settings.hints = e.target.checked; writeSettings(); };
 $('setSave').onclick = () => { save(); $('setDelete').disabled = false; };
@@ -740,7 +797,8 @@ function updateResidents(dt, ts) {
 let last = performance.now(), acc = 0, sheetTick = 0, autosaveTick = 0, lastClock = '';
 function frame(t) {
   requestAnimationFrame(frame);
-  const delta = clamp((t - last) / 1000, 0, .1); last = t; // never negative: keeps smoothing stable
+  const realDt = (t - last) / 1000, delta = clamp(realDt, 0, .1); last = t; // never negative: keeps smoothing stable
+  watchPerformance(realDt);
   if (started && !paused && !settingsOpen) { acc += delta * speed; while (acc > .12) { step(.12); acc -= .12; } }
   if (!started) want.theta += delta * .05; // gentle idle orbit behind the title screen
   updateCamera(delta);
@@ -759,7 +817,7 @@ function onResize() {
   if (resizeQueued) return; resizeQueued = true;
   requestAnimationFrame(() => {
     resizeQueued = false;
-    renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); // pixel ratio stays at the quality level
     const wasHome = atHome; computeHome(); if (wasHome || !started) resetCamera();
   });
 }
@@ -785,6 +843,8 @@ window.__tlw = {
   footprints: FOOTPRINTS.map(f => ({ site: f.site, r: f.r, porch: !!f.porch })),
   townBounds() { return projectedBounds(); }, usableRect: () => usableRect(false), settings,
   world: world.stats, sites: sites.map(s => s.slice(0, 3)), renderInfo: () => ({ ...lastRenderInfo }), worldState: world.state,
+  quality: () => ({ setting: settings.quality, level: qLevel, fps: perf.fps, downgrades: perf.downgrades, pixelRatio: renderer.getPixelRatio(), shadowMap: sun.castShadow ? sun.shadow.mapSize.x : 0 }),
+  saveProblem: () => saveProblem,
   debug: { // test hooks
     setMinutes(m) { minutes = m; },
     // run the simulation synchronously (as at high speed) and report anyone visible inside a building or off the map
