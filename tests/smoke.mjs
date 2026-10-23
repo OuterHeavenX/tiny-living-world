@@ -87,17 +87,17 @@ async function test(name, fn) {
 }
 
 // ======================================================================
-await test('boots without errors; welcome screen shows v0.2.0; no save -> Continue disabled', async () => {
+await test('boots without errors; welcome screen shows v0.5.0; no save -> Continue disabled', async () => {
   const p = await open();
   ok(await p.isVisible('#welcome'), 'welcome screen should be visible');
-  ok((await p.textContent('#verWelcome')).trim() === 'v0.2.0', 'welcome version text');
+  ok((await p.textContent('#verWelcome')).trim() === 'v0.5.0', 'welcome version text');
   ok(await p.isDisabled('#btnContinue'), 'Continue disabled without save');
   ok(await p.isEnabled('#btnNew'), 'New Game enabled');
   const m0 = await tlw(p, '__tlw.state.minutes'); await p.waitForTimeout(800);
   ok(await tlw(p, '__tlw.state.minutes') === m0, 'simulation should not run on the title screen');
   await p.tap('#btnSettings');
   ok(await p.isVisible('#settings'), 'settings opens from title');
-  ok((await p.textContent('#verSettings')).includes('v0.2.0'), 'settings shows version');
+  ok((await p.textContent('#verSettings')).includes('v0.5.0'), 'settings shows version');
   await p.tap('#setClose');
   ok(p.errors.length === 0, 'console errors: ' + p.errors.join(' | '));
   if (SHOTS) await p.screenshot({ path: path.join(SHOTS, 'title-portrait.png') });
@@ -121,7 +121,7 @@ await test('New Game starts the simulation and shows the compact HUD', async () 
   ok(await p.evaluate(() => !document.getElementById('feed').classList.contains('open') && document.getElementById('feed').getAttribute('aria-hidden') === 'true'), 'touching the town closes happenings');
   await p.evaluate(() => document.getElementById('save').click()); await p.waitForTimeout(400);
   ok(await p.evaluate(() => document.getElementById('ticker').classList.contains('show')), 'news chip appears for a new event');
-  for (const id of ['pause', 'speed', 'menu', 'people', 'resetCam', 'save']) {
+  for (const id of ['pause', 'speed', 'menu', 'townBtn', 'people', 'resetCam', 'save']) {
     const b = await p.locator('#' + id).boundingBox(); ok(b.height >= 44 && b.width >= 44, id + ' tap target too small');
   }
   ok(p.errors.length === 0, 'console errors: ' + p.errors.join(' | '));
@@ -311,7 +311,7 @@ await test('loads an existing v0.1 save (no version field) unchanged', async () 
   ok((await p.textContent('#saveInfo')).includes('Day 4 · 15:00'), 'legacy save summary: ' + await p.textContent('#saveInfo'));
   await p.tap('#btnContinue'); await p.tap('#pause');
   const s = await tlw(p, '__tlw.state'); ok(s.day === 4 && near(s.minutes, 900, 2), 'legacy clock');
-  const emma = (await tlw(p, '__tlw.residents()'))[1]; ok(near(emma.x, 3, 0.6) && near(emma.z, 5, 0.6) && emma.social === 77, 'legacy resident state');
+  const emma = (await tlw(p, '__tlw.residents()'))[1]; ok(near(emma.x, 3, 0.6) && near(emma.z, 5, 0.6) && near(emma.social, 77, 0.5), 'legacy resident state: ' + JSON.stringify(emma));
   await p.evaluate(() => document.getElementById('people').click()); await p.evaluate(() => document.getElementById('sNext').click());
   ok((await p.textContent('#sMemory')).includes('Emma chatted with Lily'), 'legacy memories shown');
   ok((await p.textContent('#events')).includes('Emma chatted with Lily'), 'legacy events shown');
@@ -348,7 +348,7 @@ await test('autosaves when the app is backgrounded (only after play has started)
   const hide = () => p.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => true }); document.dispatchEvent(new Event('visibilitychange')); });
   await hide(); ok(await p.evaluate(() => !localStorage.getItem('tlw-save')), 'no save created from the title screen');
   await startNew(p); await p.waitForTimeout(500); await hide();
-  const s = await p.evaluate(() => JSON.parse(localStorage.getItem('tlw-save'))); ok(s && s.day === 1 && s.version === '0.2.0', 'autosave written');
+  const s = await p.evaluate(() => JSON.parse(localStorage.getItem('tlw-save'))); ok(s && s.day === 1 && s.version === '0.5.0' && s.saveFormat === 5 && s.society, 'autosave written');
   ok(!s.events[0].includes('Town saved'), 'quiet autosave does not spam the feed');
   await p.context().close();
 });
@@ -423,15 +423,14 @@ await test('navigation: sidewalks, crosswalks and entrances only — never throu
   await p.context().close();
 });
 
-await test('residents go home through their front door at night; Lily rests in the park', async () => {
+await test('residents go home through their front door at night (everyone has a bed now)', async () => {
   const p = await open(); await startNew(p); await p.tap('#pause');
   await p.evaluate(() => { __tlw.debug.setMinutes(22 * 60 + 5); __tlw.debug.wake(); __tlw.debug.run(150); });
-  const rs = await tlw(p, '__tlw.residents()'), homes = [0, 1, 2, 8, 7, 3, 5, 6];
-  for (const [i, r] of rs.entries()) {
-    if (r.name === 'Lily') ok(!r.inside >= 0 || r.inside === -1, 'Lily stays in the park');
-    else ok(r.inside === homes[i] || r.pathLen > 0, r.name + ' should be inside home (site ' + homes[i] + '), got inside=' + r.inside + ' site=' + r.site);
-  }
-  ok(rs.filter(r => r.visible === false || r.inside >= 0).length >= 5, 'most residents are indoors at night');
+  const rs = await tlw(p, '__tlw.residents()'), homes = [0, 1, 2, 8, 7, 3, 3, 3]; // Lily and Ethan rent rooms in Noah's Shared House
+  for (const [i, r] of rs.entries()) ok(r.inside === homes[i] || r.pathLen > 0, r.name + ' should be inside home (site ' + homes[i] + '), got inside=' + r.inside + ' site=' + r.site);
+  ok(rs.filter(r => r.visible === false || r.inside >= 0).length >= 6, 'most residents are indoors at night');
+  const why = await p.evaluate(() => __tlw.debug.society().s.people.R1.decision);
+  ok(why.kind === 'sleep' && why.reason.length > 3, 'the decision explains itself: ' + JSON.stringify(why));
   await p.context().close();
 });
 
@@ -479,7 +478,7 @@ await test('migrates v0.1 saves where residents stood inside buildings', async (
   ok(rs.filter(r => r.name !== 'Lily').every(r => r.inside >= 0 || r.pathLen > 0), 'people found inside buildings are indoors (or already heading out)');
   await p.tap('#save');
   const saved = await p.evaluate(() => JSON.parse(localStorage.getItem('tlw-save')));
-  ok(saved.saveFormat === 2 && saved.residents.every(r => typeof r.inside === 'number'), 'new saves record who is indoors');
+  ok(saved.saveFormat === 5 && saved.residents.every(r => typeof r.inside === 'number') && saved.society?.format === 5, 'new saves record who is indoors and the whole society');
   await p.context().close();
 });
 
@@ -489,7 +488,7 @@ await test('GitHub Pages: works when served from /tiny-living-world/ with relati
   ok(p.missing.length === 0, 'requests outside the repo base path / missing files: ' + p.missing.join(', '));
   ok((await tlw(p, '__tlw.world.locations.length')) === 9 && (await tlw(p, '__tlw.debug.characters().length')) === 8, 'town and residents load');
   ok(p.errors.length === 0, 'console errors: ' + p.errors.join(' | '));
-  for (const f of ['.nojekyll', 'index.html', 'src/world.js', 'src/residents.js']) ok(fs.existsSync(path.join(ROOT, f)), f + ' missing from the published root');
+  for (const f of ['.nojekyll', 'index.html', 'src/world.js', 'src/residents.js', 'src/sim/society.js', 'src/sim/defs.js']) ok(fs.existsSync(path.join(ROOT, f)), f + ' missing from the published root');
   ok(!/src=["']\/|from ['"]\/|href=["']\/(?!\/)/.test(fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8')), 'index.html uses a root-absolute path (breaks on GitHub Pages)');
   await p.context().close();
 });
@@ -590,6 +589,137 @@ await test('ambient animation runs (even when paused) and day/night lighting cha
   ok(day.sky !== night.sky && night.sky.includes('gradient'), 'sky gradient should change with time');
   if (SHOTS) await p.screenshot({ path: path.join(SHOTS, 'night-portrait.png') });
   await p.context().close();
+});
+
+/* ======================= v0.5 — the Living World ======================= */
+await test('town dashboard and The Willowbrook Times show the real simulation', async () => {
+  const p = await open(); await startNew(p); await p.tap('#pause');
+  await p.evaluate(() => __tlw.debug.advanceDays(3));
+  await p.tap('#townBtn'); await p.waitForTimeout(400);
+  ok(await tlw(p, '__tlw.state.townOpen'), 'town panel opens from the dock');
+  const tiles = await p.locator('#townBody .tile').allTextContents();
+  ok(tiles.length >= 10 && tiles.some(t => t.includes('8') && t.includes('Population')), 'dashboard tiles: ' + tiles.join(' | '));
+  const dash = await p.evaluate(() => __tlw.debug.society().dashboard());
+  ok(tiles.some(t => t.startsWith(String(dash.businesses)) && t.includes('Businesses')), 'tile values come from the simulation');
+  ok(await p.locator('#townBody svg.spark').count() >= 2, 'small charts');
+  await p.tap('#townTabs [data-tab=times]'); await p.waitForTimeout(300);
+  ok((await p.textContent('#paperEdition')).includes('The Willowbrook Times'), 'newspaper masthead');
+  const real = await p.evaluate(() => { const S = __tlw.debug.society(), ids = new Set(S.s.events.map(e => e.id)); const ed = S.s.papers.at(-1); return { n: S.s.papers.length, ok: ed.stories.every(st => ids.has(st.ev)), heads: ed.stories.map(st => st.headline) }; });
+  ok(real.n >= 3 && real.ok, 'every headline comes from a recorded event: ' + JSON.stringify(real));
+  for (const h of real.heads) ok((await p.textContent('#paperEdition')).includes(h), 'headline shown: ' + h);
+  const link = p.locator('#paperEdition [data-person]').first();
+  if (await link.count()) { const who = await link.getAttribute('data-person'); await link.click(); await p.waitForTimeout(300); ok(await tlw(p, '__tlw.state.selected') === await p.evaluate(id => __tlw.debug.society().s.people[id].name, who), 'tapping a name in the paper opens that resident'); }
+  if (await tlw(p, '__tlw.state.selected')) await p.tap('#sClose');
+  if (!(await tlw(p, '__tlw.state.townOpen'))) { await p.tap('#townBtn'); await p.waitForTimeout(200); }
+  await p.tap('#townTabs [data-tab=times]');
+  if (real.n > 1) { await p.click('#townBody .pnav button:first-child'); ok((await p.textContent('#townBody .pnav span')).includes(`Edition ${real.n - 1} of ${real.n}`), 'archive browsing'); }
+  ok(p.errors.length === 0, 'console errors: ' + p.errors.join(' | '));
+  if (SHOTS) await p.screenshot({ path: path.join(SHOTS, 'times-portrait.png') });
+  await p.context().close();
+});
+
+await test('tapping a building opens its property panel (owner, status, plot, history)', async () => {
+  const p = await open(); await startNew(p); await p.tap('#pause'); await settle(p, 1200);
+  const pt = await p.evaluate(() => __tlw.debug.screenOfPoint(7, 2.5, 1.5)); // Petal & Stem's shop front
+  await touch(p, 'touchStart', [[pt.x, pt.y]]); await touch(p, 'touchEnd', []); await p.waitForTimeout(500);
+  ok(await tlw(p, '__tlw.state.selectedPlot') === 'P007', 'florist plot selected, got ' + await tlw(p, '__tlw.state.selectedPlot'));
+  const txt = await p.textContent('#place');
+  for (const w of ['Petal & Stem', 'P007', '22 Maple Street', 'Emma', 'Valuation', 'History']) ok(txt.includes(w), 'property panel shows ' + w);
+  ok(await p.evaluate(() => getComputedStyle(document.getElementById('dock')).pointerEvents === 'none'), 'dock hides behind the panel');
+  const box = await p.locator('#place').boundingBox(), vh = await p.evaluate(() => innerHeight);
+  ok(box.height < vh * .5, 'property panel starts compact');
+  await p.click('#place [data-person=R2]'); await p.waitForTimeout(300);
+  ok(await tlw(p, '__tlw.state.selected') === 'Emma' && !(await tlw(p, '__tlw.state.selectedPlot')), 'owner link opens the resident');
+  ok(p.errors.length === 0, 'console errors: ' + p.errors.join(' | '));
+  await p.context().close();
+});
+
+await test('construction is visible: phases, workers, progress chip, and a new business opens', async () => {
+  const p = await open(devices['iPhone 13'], { shadows: true }); await startNew(p); await p.tap('#pause');
+  await p.evaluate(() => { const S = __tlw.debug.society(); S.setTime(2, 7 * 60); S.setMode('sandbox'); if (S.s.plots.P011.project) return; S.sandbox('set-owner', { plot: 'P011', owner: 'R6' }); S.sandbox('demolish', { plot: 'P011' }); __tlw.debug.syncPlots(); });
+  const keys = new Set(), crew = []; let guard = 0;
+  while (guard++ < 800) {
+    const st = await p.evaluate(() => { __tlw.debug.run(30, false); const S = __tlw.debug.society(), pl = S.s.plots.P011; if (!pl.project && !pl.business && !pl.building) S.sandbox('build', { plot: 'P011', category: 'repair', owner: 'R6' }); return { key: __tlw.debug.plotKeys().P011, crew: __tlw.debug.workers().filter(w => w.visible && w.state === 'working').length, open: !!pl.business }; });
+    keys.add(st.key.split('|').slice(0, 4).join('|')); crew.push(st.crew); if (st.open) break;
+  }
+  const phases = [...keys].map(k => k.split('|')[3] || k.split('|')[0]).filter(Boolean);
+  for (const ph of ['fenced', 'dismantle', 'rubble', 'vacant', 'foundation', 'framing', 'roof', 'opening']) ok(phases.includes(ph), 'visible stage ' + ph + ' (saw ' + [...new Set(phases)].join(',') + ')');
+  ok(crew.some(n => n >= 1), 'construction workers arrive and work on site');
+  ok(await p.evaluate(() => !!__tlw.debug.society().s.plots.P011.business), 'the new repair shop opened');
+  // progress chip while a project is selected
+  await p.evaluate(() => { const S = __tlw.debug.society(); while (!(S.hour === 9 && (S.day - 1) % 7 < 6)) S.advance(60); const r = S.sandbox('build', { plot: 'P010', category: 'bookstore', owner: 'R3' }); if (!r.ok) throw new Error(r.message); __tlw.debug.syncPlots(); __tlw.debug.openPlace('P010', true); __tlw.debug.run(240, false); });
+  await p.waitForTimeout(800);
+  ok(await p.evaluate(() => getComputedStyle(document.getElementById('plotChip')).display !== 'none' && document.getElementById('plotChip').textContent.includes('%')), 'progress chip shows over the site');
+  ok((await p.textContent('#place')).includes('Budget'), 'property panel shows construction budget and spending');
+  ok(p.errors.length === 0, 'console errors: ' + p.errors.join(' | '));
+  if (SHOTS) await p.screenshot({ path: path.join(SHOTS, 'construction-portrait.png') });
+  await p.context().close();
+});
+
+await test('play modes: observer, influence (limited, residents may refuse) and sandbox', async () => {
+  const p = await open(); await startNew(p); await p.tap('#pause');
+  await p.tap('#townBtn'); await p.tap('#townTabs [data-tab=play]'); await p.waitForTimeout(200);
+  ok(await tlw(p, '__tlw.state.mode') === 'observer' && await p.locator('#townBody .act').count() === 0, 'observer has no actions');
+  await p.click('#townBody .modes button:nth-child(2)'); await p.waitForTimeout(200);
+  ok(await tlw(p, '__tlw.state.mode') === 'influence', 'influence mode');
+  const pts0 = await p.evaluate(() => __tlw.debug.society().s.town.influence.points);
+  const sponsor = p.locator('#townBody .act', { hasText: 'Sponsor a festival' }).locator('button'); await sponsor.click(); await p.waitForTimeout(200);
+  ok(await p.evaluate(() => __tlw.debug.society().s.town.influence.points) === pts0 - 1, 'an influence action costs a point');
+  ok(await p.evaluate(() => __tlw.debug.society().s.town.scheduled.some(e => e.kind === 'festival')), 'the festival is on the calendar');
+  const help = p.locator('#townBody .act', { hasText: 'Help a job application' });
+  await help.locator('select').selectOption('R1'); await help.locator('button').click(); await p.waitForTimeout(200);
+  ok((await p.textContent('#modeMsg')).includes('already has a job'), 'residents can decline / actions can be refused');
+  await p.click('#townBody .modes button:nth-child(3)'); await p.waitForTimeout(200);
+  const money = p.locator('#townBody .act', { hasText: 'Adjust money' }); await money.locator('select').first().selectOption('R8'); await money.locator('button').click();
+  ok(await p.evaluate(() => { const S = __tlw.debug.society(); return S.s.events.some(e => e.type === 'sandbox.money') && S.checkInvariants().length === 0; }), 'sandbox change recorded and money stays accounted for');
+  ok(p.errors.length === 0, 'console errors: ' + p.errors.join(' | '));
+  await p.context().close();
+});
+
+await test('resident journal: why they act, ambitions, relationships, memories with sources', async () => {
+  const p = await open(); await startNew(p); await p.tap('#pause');
+  await p.evaluate(() => __tlw.debug.advanceDays(4));
+  await p.tap('#people'); await p.waitForTimeout(300);
+  ok((await p.textContent('#sWhy')).startsWith('Why:'), 'the sheet explains the current decision');
+  ok(/\$[\d,]+/.test(await p.textContent('#sJob')), 'job and money in the header');
+  await p.tap('#grab'); await p.waitForTimeout(300);
+  ok((await p.textContent('#sLife')).includes('Ambition') && (await p.textContent('#sLife')).includes('Run the most successful bakery'), 'ambition with milestones');
+  await p.tap('#sTabs [data-tab=people]'); ok((await p.textContent('#sFriendList')).length > 5, 'relationships listed');
+  await p.tap('#sTabs [data-tab=memories]'); const mem = await p.textContent('#sMemList'); ok(/Day \d+ · /.test(mem), 'memories carry day and source: ' + mem.slice(0, 120));
+  await p.tap('#sTabs [data-tab=story]'); ok((await p.textContent('#sStory')).includes('Career'), 'journal timeline and career');
+  ok(p.errors.length === 0, 'console errors: ' + p.errors.join(' | '));
+  if (SHOTS) await p.screenshot({ path: path.join(SHOTS, 'journal-portrait.png') });
+  await p.context().close();
+});
+
+await test('v0.5 saves keep the whole society; export and import; optional offline progress', async () => {
+  const p = await open(); await startNew(p); await p.tap('#pause');
+  await p.evaluate(() => __tlw.debug.advanceDays(5));
+  await p.tap('#save');
+  const before = await p.evaluate(() => { const S = __tlw.debug.society(); return { money: Object.values(S.s.accounts).reduce((a, b) => a + b, 0), papers: S.s.papers.length, events: S.s.seq.ev, cash: S.cash('R1'), day: S.day }; });
+  await p.reload(); await p.waitForFunction(() => window.__tlw);
+  const after = await p.evaluate(() => { const S = __tlw.debug.society(); return { money: Object.values(S.s.accounts).reduce((a, b) => a + b, 0), papers: S.s.papers.length, events: S.s.seq.ev, cash: S.cash('R1'), day: S.day }; });
+  ok(JSON.stringify(after) === JSON.stringify(before), 'society restored exactly: ' + JSON.stringify({ before, after }));
+  // export → import
+  await p.tap('#btnSettings');
+  const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#setExport')]);
+  const file = await dl.path(); const exported = JSON.parse(fs.readFileSync(file, 'utf8'));
+  ok(exported.saveFormat === 5 && exported.society.format === 5, 'exported a v0.5 save file');
+  await p.evaluate(() => localStorage.removeItem('tlw-save'));
+  p.once('dialog', d => d.accept());
+  await p.setInputFiles('#importFile', file); await p.waitForTimeout(600);
+  ok(await p.evaluate(() => !!localStorage.getItem('tlw-save')) && await p.isEnabled('#btnContinue'), 'import restores the save');
+  await p.context().close();
+  // offline progress: off by default; when on, time away (capped at 3 days) catches up and shows a summary
+  const s = JSON.parse(JSON.stringify(exported)); s.savedAt = Date.now() - 90 * 1000; // 90 s away at 1× = 90 game minutes
+  const q = await open(devices['iPhone 13'], { storage: { 'tlw-save': JSON.stringify(s), 'tlw-settings': JSON.stringify({ shadows: false, quality: 'medium', offline: true }) } });
+  const t0 = await q.evaluate(() => __tlw.debug.society().s.abs);
+  await q.tap('#btnContinue'); await q.waitForTimeout(500);
+  const t1 = await q.evaluate(() => __tlw.debug.society().s.abs);
+  ok(t1 - t0 >= 89 && t1 - t0 < 110, '90 s away ≈ 90 game minutes of catch-up (got ' + (t1 - t0).toFixed(1) + ')');
+  ok(await q.isVisible('#summary') && (await q.textContent('#sumText')).includes('while you were away'), 'away summary shown');
+  ok(await q.evaluate(() => __tlw.debug.society().checkInvariants().length === 0), 'invariants hold after catching up');
+  await q.context().close();
 });
 
 await browser.close();

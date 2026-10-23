@@ -9,8 +9,9 @@ new vm.SourceTextModule(m[1], { identifier: 'index.html#module' }); // throws on
 const v = html.match(/const GAME_VERSION = '([^']+)'/)?.[1];
 if (v !== pkg.version) throw new Error(`GAME_VERSION ${v} != package.json ${pkg.version}`);
 for (const id of ['btnContinue', 'btnNew', 'btnSettings', 'resetCam', 'sheet', 'settings']) if (!html.includes(`id="${id}"`)) throw new Error('missing #' + id);
-for (const f of ['src/world.js', 'src/residents.js']) {
+for (const f of ['src/world.js', 'src/residents.js', 'src/sim/society.js', 'src/sim/defs.js']) {
   new vm.SourceTextModule(fs.readFileSync(path.join(root, f), 'utf8'), { identifier: f }); // throws on syntax errors
-  if (!html.includes(`from './${f}'`)) throw new Error('index.html does not import ' + f);
+  if (!f.includes('defs') && !html.includes(`from './${f}'`)) throw new Error('index.html does not import ' + f);
 }
-console.log(`  ✓ index.html, src/world.js and src/residents.js parse; version ${v}`);
+for (const id of ['town', 'place', 'townBtn', 'summary', 'setExport', 'setImport', 'optOffline']) if (!html.includes(`id="${id}"`)) throw new Error('missing #' + id);
+console.log(`  ✓ index.html, src/world.js, src/residents.js and src/sim parse; version ${v}`);
