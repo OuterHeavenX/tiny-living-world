@@ -199,6 +199,12 @@ body:not(.in-game) .ingame-only{display:none}
 .act select{flex:1 1 40%;min-width:0;min-height:38px}
 .act button{min-height:38px;background:rgba(255,255,255,.14);color:#fff}
 .act button.primary{background:var(--accent);color:#2b2414}
+input.txt{font:inherit;font-size:14px;width:52%;min-height:40px;border-radius:10px;border:1px solid var(--line);background:rgba(255,255,255,.12);color:#fff;padding:0 10px;-webkit-user-select:text;user-select:text}
+#aiStatus.ok{color:#9fd38a}#aiStatus.bad{color:#ffb3a8}
+.speech{position:absolute;left:0;top:0;transform:translate(-50%,-100%);max-width:min(230px,60vw);padding:6px 10px;border-radius:12px;background:#fffdf6;color:#2a2620;font-size:12.5px;line-height:1.3;box-shadow:0 2px 8px rgba(0,0,0,.25);pointer-events:none;opacity:0;transition:opacity .3s}
+.speech.show{opacity:1}
+.speech::after{content:"";position:absolute;left:50%;bottom:-6px;margin-left:-6px;border:6px solid transparent;border-bottom:0;border-top-color:#fffdf6}
+.ai{font-size:11px;font-weight:700;color:#bfe3ff;background:rgba(119,211,239,.18);border-radius:8px;padding:0 6px;margin-left:4px}
 #modeMsg{min-height:1.2em;color:#ffe08a;font-size:12.5px;margin:6px 0}
 #plotChip{position:absolute;left:0;top:0;transform:translate(-50%,-100%);padding:4px 10px;border-radius:10px;font-size:12px;font-weight:700;pointer-events:none;white-space:nowrap;display:none}
 #plotChip .prog{width:110px;margin:3px 0 0}
@@ -284,6 +290,7 @@ body.panel-open #dock,body.panel-open #ticker{opacity:0;pointer-events:none;tran
     <div class="pbody" id="placeBody"></div>
   </div>
   <div id="plotChip" class="glass" aria-hidden="true"></div>
+  <div id="speechA" class="speech" aria-live="polite"></div><div id="speechB" class="speech" aria-live="polite"></div>
 </div>
 
 <div id="welcome" class="overlay">
@@ -299,7 +306,7 @@ body.panel-open #dock,body.panel-open #ticker{opacity:0;pointer-events:none;tran
       <button id="btnNew">New Game</button>
       <button id="btnSettings" class="ghost">Settings</button>
     </div>
-    <p class="ver" id="verWelcome">v0.5.0</p>
+    <p class="ver" id="verWelcome">v0.6.0</p>
   </div>
 </div>
 
@@ -319,6 +326,10 @@ body.panel-open #dock,body.panel-open #ticker{opacity:0;pointer-events:none;tran
     <div class="row"><label for="optQuality">Graphics<small id="qualityNote">Auto adjusts to keep play smooth</small></label><select id="optQuality"><option value="auto">Auto</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></div>
     <div class="row"><label for="optShadows">Shadows<small>Turn off for better battery life</small></label><input id="optShadows" class="switch" type="checkbox"></div>
     <div class="row"><label for="optAutosave">Autosave<small>Every 2 minutes and when you leave</small></label><input id="optAutosave" class="switch" type="checkbox"></div>
+    <div class="row"><label for="optAI">AI residents<small>Let a language model on your computer choose residents’ plans and big decisions</small></label><input id="optAI" class="switch" type="checkbox"></div>
+    <div class="row airow"><label for="optAIEndpoint">Model server<small>Ollama, LM Studio or tools/serve.mjs (OpenAI-compatible)</small></label><input id="optAIEndpoint" class="txt" type="text" inputmode="url" autocomplete="off" spellcheck="false"></div>
+    <div class="row airow"><label for="optAIModel">Model<small id="aiStatus">Not connected</small></label><input id="optAIModel" class="txt" type="text" list="aiModels" autocomplete="off" spellcheck="false"><datalist id="aiModels"></datalist></div>
+    <div class="row airow"><span style="flex:1"></span><button id="aiTest" class="ghost">Test connection</button></div>
     <div class="row"><label for="optOffline">Offline progress<small>Let the town live on while you’re away (up to 3 days)</small></label><input id="optOffline" class="switch" type="checkbox"></div>
     <div class="row"><label for="optHints">Gesture hints<small>Show controls tip when play starts</small></label><input id="optHints" class="switch" type="checkbox"></div>
     <div class="stack">
@@ -329,7 +340,7 @@ body.panel-open #dock,body.panel-open #ticker{opacity:0;pointer-events:none;tran
       <input id="importFile" type="file" accept="application/json,.json" hidden>
       <button id="setDelete" class="danger">Delete saved town</button>
     </div>
-    <p class="ver" id="verSettings">Tiny Living World v0.5.0</p>
+    <p class="ver" id="verSettings">Tiny Living World v0.6.0</p>
   </div>
 </div>
 
@@ -337,9 +348,10 @@ body.panel-open #dock,body.panel-open #ticker{opacity:0;pointer-events:none;tran
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
 import { buildWorld } from './src/world.js';
 import { buildCharacter, animateCharacter, makeBubble, createNav, insideFootprint, FOOTPRINTS, segmentBlocked, moodOf, setDynamicFootprint } from './src/residents.js';
+import { createMind } from './src/ai/mind.js';
 import { Society, SAVE_FORMAT, money, CATEGORIES, AMBITIONS, DAY, WEEKDAYS, weekday } from './src/sim/society.js';
 
-const GAME_VERSION = '0.5.0';
+const GAME_VERSION = '0.6.0';
 const SAVE_KEY = 'tlw-save';          // unchanged from v0.1 so existing saves keep working
 const SETTINGS_KEY = 'tlw-settings';
 const $ = id => document.getElementById(id);
@@ -347,7 +359,9 @@ const readJSON = k => { try { return JSON.parse(localStorage.getItem(k) || 'null
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 /* ================= Settings ================= */
-const DEFAULT_SETTINGS = { sensitivity: 1, shadows: true, autosave: true, hints: true, quality: 'auto', offline: false };
+const DEFAULT_SETTINGS = { sensitivity: 1, shadows: true, autosave: true, hints: true, quality: 'auto', offline: false, aiEnabled: false, aiEndpoint: '', aiModel: 'llama3.2' };
+// Served by tools/serve.mjs (or any local server)? Use its /ai proxy. From GitHub Pages, talk to Ollama directly.
+const defaultAIEndpoint = () => location.protocol === 'https:' || location.hostname.endsWith('github.io') ? 'http://localhost:11434/v1' : location.origin + '/ai/v1';
 const settings = { ...DEFAULT_SETTINGS, ...(readJSON(SETTINGS_KEY) || {}) };
 function writeSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch {} }
 
@@ -474,7 +488,7 @@ function societyFrom(saved) {
 }
 function applySave(saved) {
   if (saved) saved = sanitizeSave(saved);
-  society = societyFrom(saved); syncClock();
+  society = societyFrom(saved); society.setMindEnabled(settings.aiEnabled); syncClock();
   events = saved?.events ?? ['Welcome to Willowbrook!'];
   lastEventSeq = society.s.seq.ev; seenEdition = saved?.seenEdition ?? society.s.seq.ed;
   residents.forEach(r => { r.decSeq = -1; });
@@ -489,7 +503,7 @@ function applySave(saved) {
   syncPlots(true); renderEvents();
 }
 function resetWorld() {
-  society = Society.create(newSeed()); syncClock(); events = ['Welcome to Willowbrook!']; lastEventSeq = society.s.seq.ev; seenEdition = 0;
+  society = Society.create(newSeed()); society.setMindEnabled(settings.aiEnabled); syncClock(); events = ['Welcome to Willowbrook!']; lastEventSeq = society.s.seq.ev; seenEdition = 0;
   for (const r of residents) { placeAt(r, r.home[0], r.home[1]); r.yaw = r.faceYaw = 0; r.dest = [...r.home]; r.state = 'Starting the day'; r.decSeq = -1; }
   for (const w of workers) { w.g.visible = false; w.job = null; w.state = 'off'; }
   closeSheet(); closePanels(); syncPlots(true); renderEvents();
@@ -606,6 +620,29 @@ function showInteraction(it) {
   if (a.inside >= 0 || b.inside >= 0 || a.pos.distanceTo(b.pos) > 6 || a.path.length - a.pi > 0 || b.path.length - b.pi > 0) return;
   pauseTogether(a, b, it.kind === 'argument' ? 4 : 6, it.kind === 'argument' ? 'argue' : 'talk');
   if (it.kind !== 'argument') log(a.name + ' chatted with ' + b.name, true);
+  if (settings.aiEnabled && it.kind !== 'argument' && simNow() - lastDialogue > 40 && mind.status().ok !== false) { // what they actually said, from the local model
+    lastDialogue = simNow();
+    mind.dialogue(society, a.pid, b.pid, (a.site >= 0 || b.site >= 0) ? SITE_NAME(a.site >= 0 ? a.site : b.site) : 'a street in Willowbrook', out => {
+      if (!out || typeof out.a !== 'string' || typeof out.b !== 'string') return;
+      const la = out.a.slice(0, 140), lb = out.b.slice(0, 140);
+      say(a, la, 'speechA'); setTimeout(() => say(b, lb, 'speechB'), 2600);
+      log(`${a.name}: “${la}” — ${b.name}: “${lb}”`, true);
+      society.memo(person(a), { text: `${b.name} told me: “${lb}”`, who: [b.pid], sig: .25, src: 'self' });
+      society.memo(person(b), { text: `${a.name} told me: “${la}”`, who: [a.pid], sig: .25, src: 'self' });
+    });
+  }
+}
+let lastDialogue = -1e9;
+const speech = { speechA: null, speechB: null };
+function say(r, text, id) { const e = $(id); e.textContent = text; e.classList.add('show'); speech[id] = { r, until: performance.now() + 5500 }; }
+function updateSpeech() {
+  for (const [id, sp] of Object.entries(speech)) {
+    const e = $(id); if (!sp) continue;
+    if (performance.now() > sp.until || !started || sp.r.inside >= 0) { e.classList.remove('show'); speech[id] = null; continue; }
+    _p.set(sp.r.g.position.x, sp.r.g.position.y + 3.2, sp.r.g.position.z).project(camera);
+    if (_p.z > 1) { e.classList.remove('show'); continue; }
+    e.style.left = ((_p.x + 1) / 2 * innerWidth) + 'px'; e.style.top = ((1 - _p.y) / 2 * innerHeight) + 'px';
+  }
 }
 function chat(a, b) { society.interact(person(a), person(b), person(a).loc.plot || person(a).home, true); if (a.inside < 0 && b.inside < 0) pauseTogether(a, b, 6, 'talk'); log(a.name + ' chatted with ' + b.name); society.consumeInteractions(); }
 
@@ -909,6 +946,7 @@ function updateSheet(force) {
   const key = r.id + '|' + sheetTab + '|' + p.memories.length + '|' + (p.memories[0]?.id) + '|' + p.timeline.length + '|' + Math.round(society.cash(p.id) / 10) + '|' + JSON.stringify(r.friendships) + '|' + p.worries.join();
   if (force || key !== lastSheetKey) { lastSheetKey = key; renderJournal(r, important); }
 }
+const TRAIT_WORD = { ambition: 'driven', sociability: 'outgoing', frugality: 'thrifty', kindness: 'kind', risk: 'daring', creativity: 'creative', temper: 'short-tempered' };
 function renderJournal(r, important) {
   const p = person(r), j = society.journal(p.id);
   const li = (...k) => el('li', {}, ...k);
@@ -927,8 +965,11 @@ function renderJournal(r, important) {
       el('dt', { text: 'Mood' }), el('dd', { text: `happiness ${j.happiness} · stress ${j.stress}` })),
     el('h4', { text: 'Ambition' }), el('div', { text: j.ambition.label }), el('div', { class: 'prog' }, el('i', { style: `width:${j.ambition.progress}%` })),
     el('ul', { class: 'list' }, ...j.ambition.milestones.map(m => li((m.done ? '✓ ' : '○ ') + m.label))),
-    el('h4', { text: 'Worries' }), el('div', { text: j.worries.length ? j.worries.join(' · ') : 'Nothing much' }));
+    el('h4', { text: 'Worries' }), el('div', { text: j.worries.length ? j.worries.join(' · ') : 'Nothing much' }),
+    el('h4', { text: 'Today' }), el('div', {}, j.intent ? el('span', {}, j.intent.label + ' — “' + j.intent.reason + '”', j.intent.source === 'ai' ? el('span', { class: 'ai', title: 'Chosen by the AI mind', text: 'AI' }) : null) : 'No particular plan'),
+    el('div', { style: 'color:var(--muted);margin-top:4px', text: `Mood: ${j.mood}${j.sick ? ' · has a cold' : ''}${j.changes.length ? ' · lately more ' + j.changes.map(([k, d]) => (d > 0 ? '' : 'less ') + TRAIT_WORD[k]).join(', ') : ''}${j.habits.length ? ' · enjoys ' + j.habits.join(', ') : ''}` }));
   const story = $('sStory'); story.replaceChildren(
+    el('h4', { text: 'Diary' }), el('ul', { class: 'list' }, ...(j.diary.length ? j.diary.slice(0, 7).map(d => li(el('small', { text: 'Day ' + d.day + ' · ' }), d.text, d.source === 'ai' ? el('span', { class: 'ai', text: 'AI' }) : null)) : [li('No entries yet — residents write at 22:00.')])),
     el('h4', { text: 'Milestones & life events' }), el('ul', { class: 'list' }, ...(j.timeline.length ? j.timeline.slice(0, 30).map(t => { const ev = society.s.events.find(e => e.id === t.ev); return li(el('small', { text: 'Day ' + t.day + ' · ' }), ev ? linkify(t.text, ev.who, ev.plot) : t.text); }) : [li('The story is just beginning.')])),
     el('h4', { text: 'Career' }), el('ul', { class: 'list' }, ...j.career.map(c => li(el('small', { text: 'Day ' + c.day + ' · ' }), c.text))));
   for (const b of $('sTabs').children) b.setAttribute('aria-selected', String(b.dataset.tab === sheetTab));
@@ -1017,6 +1058,11 @@ function overview(D) {
     el('div', { class: 'chart' }, el('small', { text: 'Mayor approval' }), spark(H.map(h => h.approval), '#9fd38a')),
     el('div', { class: 'chart' }, el('small', { text: 'Residents working' }), spark(H.map(h => h.employed), '#77d3ef', true)),
     el('div', { class: 'chart' }, el('small', { text: 'Average happiness' }), spark(H.map(h => h.happiness), '#ffb3c8'))));
+  if (settings.aiEnabled) {
+    const ms = mind.status(), ai = society.s.ai;
+    out.push(el('h4', { text: 'AI minds' }), el('div', { text: (ms.ok === false ? '⚠ ' + ms.error : ms.ok ? `Connected to ${settings.aiModel}` : 'Waiting for the first answer…') + ` · ${ai.answered} decisions made · ${ai.fallbacks} left to the rules · ${ai.queue.length} waiting${ms.ms ? ` · ~${(ms.ms / 1000).toFixed(1)}s per answer` : ''}` }),
+      el('ul', { class: 'list' }, ...ai.recent.filter(x => x.type !== 'diary').slice(0, 6).map(x => el('li', {}, personLink(x.pid), ` chose “${x.choice}”`, x.reason ? el('br') : null, x.reason ? el('small', { text: '“' + x.reason + '”' }) : null))));
+  }
   out.push(el('h4', { text: 'Recent events' }), el('ul', { class: 'list' }, ...(D.recent.length ? D.recent.map(e => el('li', {}, el('small', { text: 'Day ' + e.day + ' · ' }), linkify(e.text, e.who, e.plot))) : [el('li', { text: 'A quiet start in Willowbrook.' })])));
   return out;
 }
@@ -1233,6 +1279,7 @@ function openSettings() {
   settingsOpen = true;
   $('optQuality').value = settings.quality; $('qualityNote').textContent = settings.quality === 'auto' ? 'Auto adjusts to keep play smooth (now: ' + qLevel + ')' : 'Fixed quality';
   $('optSens').value = settings.sensitivity; $('optShadows').checked = settings.shadows; $('optAutosave').checked = settings.autosave; $('optHints').checked = settings.hints; $('optOffline').checked = settings.offline;
+  $('optAI').checked = settings.aiEnabled; $('optAIEndpoint').value = settings.aiEndpoint || defaultAIEndpoint(); $('optAIModel').value = settings.aiModel; syncAIRows();
   $('setDelete').disabled = !readJSON(SAVE_KEY);
   $('settings').hidden = false; $('setClose').focus({ preventScroll: true });
 }
@@ -1245,6 +1292,28 @@ $('optQuality').onchange = e => { settings.quality = e.target.value; perf.playTi
 $('optAutosave').onchange = e => { settings.autosave = e.target.checked; writeSettings(); };
 $('optHints').onchange = e => { settings.hints = e.target.checked; writeSettings(); };
 $('optOffline').onchange = e => { settings.offline = e.target.checked; writeSettings(); };
+function syncAIRows() { for (const r of document.querySelectorAll('.airow')) r.style.display = settings.aiEnabled ? '' : 'none'; }
+$('optAI').onchange = e => { settings.aiEnabled = e.target.checked; writeSettings(); society.setMindEnabled(settings.aiEnabled); syncAIRows(); if (settings.aiEnabled) testAI(); };
+$('optAIEndpoint').onchange = e => { const v = e.target.value.trim(); settings.aiEndpoint = v === defaultAIEndpoint() ? '' : v; writeSettings(); };
+$('optAIModel').onchange = e => { settings.aiModel = e.target.value.trim(); writeSettings(); };
+async function testAI() {
+  const st = $('aiStatus'); st.className = ''; st.textContent = 'Testing…';
+  const res = await mind.test();
+  $('aiModels').replaceChildren(...(res.models || []).map(m => el('option', { value: m })));
+  if (res.ok && !res.hasModel && res.models.length) { st.className = 'bad'; st.textContent = `Connected, but “${settings.aiModel}” isn’t installed. Try: ${res.models.slice(0, 3).join(', ')}`; }
+  else { st.className = res.ok ? 'ok' : 'bad'; st.textContent = res.ok ? `Connected · ${res.models.length} model${res.models.length === 1 ? '' : 's'} available` : res.error; }
+}
+$('aiTest').onclick = testAI;
+// the AI mind: answers questions the simulation queues (plans, big decisions, diaries), one at a time
+const mind = createMind({
+  getSociety: () => society,
+  getConfig: () => ({ enabled: settings.aiEnabled, endpoint: settings.aiEndpoint || defaultAIEndpoint(), model: settings.aiModel }),
+  onAnswer: (q, out) => {
+    const name = society.s.people[q.pid]?.name; if (!name || q.type === 'diary') return;
+    const choice = q.options?.[parseInt(out?.choice, 10) - 1];
+    if (choice) log(`${name} decided: ${choice}${out.reason ? ` — “${String(out.reason).slice(0, 100)}”` : ''}`, q.type === 'intent');
+  },
+});
 // Export / import: the whole town as a JSON file
 $('setExport').onclick = () => {
   const json = sessionStarted ? JSON.stringify(savePayload()) : localStorage.getItem(SAVE_KEY);
@@ -1337,7 +1406,8 @@ function frame(t) {
   updateResidents(delta, t / 1000);
   ring.visible = !!selected && selected.inside < 0; if (selected) { ring.position.set(selected.g.position.x, selected.g.position.y + .17, selected.g.position.z); ring.material.opacity = .65 + Math.sin(t / 250) * .25; }
   if ((sheetTick += delta) > .4) { sheetTick = 0; if (selected) updateSheet(false); if (townOpen) renderTown(false); if (selectedPlot) renderPlace(false); }
-  updatePlotChip();
+  updatePlotChip(); updateSpeech();
+  if (settings.aiEnabled) mind.pump();
   if (started && settings.autosave && (autosaveTick += delta) > 120) { autosaveTick = 0; save(true); }
   renderer.render(scene, camera);
   lastRenderInfo.calls = renderer.info.render.calls; lastRenderInfo.triangles = renderer.info.render.triangles;
@@ -1398,7 +1468,7 @@ window.__tlw = {
     workers: () => workers.map(w => ({ visible: w.g.visible, state: w.state, x: w.pos.x, z: w.pos.z, job: w.job })),
     plotKeys: () => Object.fromEntries(Object.keys(world.PLOT_ANCHOR).map(p => [p, world.plotKey(p)])),
     screenOfPoint(x, y, z) { _p.set(x, y, z).project(camera); return { x: (_p.x + 1) / 2 * innerWidth, y: (1 - _p.y) / 2 * innerHeight }; },
-    savePayload,
+    savePayload, mind: () => mind.status(),
   },
 };
 </script>
