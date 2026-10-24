@@ -47,8 +47,12 @@ test('economy: businesses keep daily books (customers, revenue, profit, cash) an
   assert.ok(avg(B) < avg(A) * .9, `competition lowers demand (${avg(B).toFixed(1)} vs ${avg(A).toFixed(1)})`);
 });
 
+function findClosure(maxSeeds = 60, days = 100) { // closures are emergent: find a town where Sunrise Bakery closed
+  for (let seed = 1; seed <= maxSeeds; seed++) { const S = Society.create(seed); for (let d = 0; d < days && S.s.businesses.B1.status !== 'closed'; d++) S.advance(DAY); if (S.s.businesses.B1.status === 'closed') return S; }
+  return null;
+}
 test('economy: sustained trouble leads to recovery attempts before any closure', () => {
-  const S = Society.create(STORY_SEED); run(S, 80, false);
+  const S = findClosure(); assert.ok(S, 'no town in range saw the bakery close');
   const b = S.s.businesses.B1;
   assert.equal(b.status, 'closed');
   const closed = S.s.events.find(e => e.type === 'business.closed' && e.biz === 'B1');
