@@ -81,7 +81,7 @@ async function test(name, fn) {
   if (process.env.ONLY && !new RegExp(process.env.ONLY).test(name)) return;
   const t0 = Date.now();
   try { await fn(); passed++; results.push(`  ✓ ${name} (${Date.now() - t0}ms)`); }
-  catch (e) { failed++; results.push(`  ✗ ${name}\n      ${e.message}`); }
+  catch (e) { failed++; results.push(`  ✗ ${name}\n      ${e.message}`); if (process.env.GITHUB_ACTIONS) console.log(`::error title=${name.replace(/[:,\n]/g, ' ')}::${e.message.replace(/\s+/g, ' ').slice(0, 400)}`); }
   finally { for (const c of openContexts) await c.close().catch(() => {}); openContexts.clear(); }
   console.log(results[results.length - 1]);
 }
