@@ -8,6 +8,7 @@ import {
   PLOTS, START_BUILDINGS, START_BUSINESSES, START_OWNERS, START_FOR_SALE, PEOPLE, RENTS, START_TREASURY, TOWN,
   AMBITIONS, MILESTONE_LABELS, AMBITION_CATEGORY,
 } from './defs.js';
+import { MindMixin, ensureMinds } from './minds.js';
 
 export const SAVE_FORMAT = 5;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -62,6 +63,7 @@ export function createState(seed = 20261023, opts = {}) {
   for (const p of Object.values(st.people)) if (p.job?.employer?.startsWith('B') && st.businesses[p.job.employer].owner !== p.id) st.businesses[p.job.employer].employees.push(p.id);
   for (const [plot, f] of Object.entries(START_FOR_SALE)) { const p = st.plots[plot]; p.valuation = valuation(st, p); p.forSale = { price: Math.round(p.valuation * f), since: 1, seller: p.owner, reason: 'Town land sale' }; }
   for (const p of Object.values(st.plots)) { p.valuation = valuation(st, p); p.purchasePrice = p.valuation; }
+  ensureMinds(st);
   st.initialMoney = totalMoney(st);
   const S = new Society(st);
   S.record('town.founded', { text: 'Willowbrook’s eight residents begin a new chapter.', imp: 1, quiet: true });
@@ -138,6 +140,7 @@ export class Society {
       const n = p.needs;
       if (here === 'sleep') n.energy = clamp(n.energy + dt * .075, 0, 100); else n.energy = clamp(n.energy - dt * (here === 'work' ? .016 : .012), 0, 100);
       n.hunger = clamp(n.hunger - dt * .018, 0, 100);
+      if (p.sickUntil > s.abs && here !== 'sleep') n.energy = clamp(n.energy - dt * .012, 0, 100);
       const social = (here === 'socialize' || here === 'event' || here === 'date') ? .05 : here === 'sleep' ? 0 : -.006;
       n.social = clamp(n.social + dt * social, 0, 100);
       if (here === 'work' && d) { const b = s.businesses[d.biz]; if (b) b.attended[p.id] = (b.attended[p.id] || 0) + dt; }
@@ -162,8 +165,10 @@ export class Society {
   hourly(H) {
     const s = this.s; if (H <= s.hourDone) return; s.hourDone = H;
     const hour = H % 24, day = Math.floor(H / 24) + 1;
+    this.mindHourly();
     if (hour === 0) this.daily(day - 1);
-    if (hour === 6) this.publishPaper(day - 1);
+    if (hour === 6) { this.publishPaper(day - 1); this.morningIntentions(); }
+    if (hour === 22) this.writeDiaries(day);
     if (hour === 9) { this.permitDecisions(); this.openings(); }
     if (hour === 10) this.propertyMarket();
     if (hour === 18 && weekday(day) === 2) this.townMeeting();
@@ -281,10 +286,12 @@ export class Society {
     if (!night) add('leisure', 'P006', .75 + T.sociability * .35, 'Strolling in the park', 'Fresh air', 60, { inside: false });
     if (!night && p.traits.creativity > .7) add('leisure', 'P012', .7 + T.creativity * .3, 'Watching the ducks', 'A quiet moment', 50, { inside: false });
 
-    const best = opts.sort((a, b) => b.u - a.u)[0];
+    this.mindAdjust(p, opts); // today's intention, mood, habits, health and the odd whim
+    const best = this.chooseOption(p, opts); // weighted chance, not always the top score
+    if (best.byIntent && p.intent && !best.reason.includes(p.intent.reason)) best.reason += ' · ' + p.intent.reason;
     const prev = p.decision;
     const travel = this.travelMinutes(p, best.plot);
-    p.decision = { kind: best.kind, plot: best.plot, label: best.label, reason: best.reason, inside: best.inside, biz: best.biz, price: best.price, group: best.group, act: best.act, with: best.with, since: s.abs, arriveAt: s.abs + travel, until: s.abs + travel + Math.max(30, best.dur), seq: (prev?.seq || 0) + 1, applied: false };
+    p.decision = { kind: best.kind, plot: best.plot, label: best.label, reason: best.reason, inside: best.inside, biz: best.biz, price: best.price, group: best.group, act: best.act, with: best.with, whim: !!best.whim, surprise: !!best.surprise, since: s.abs, arriveAt: s.abs + travel, until: s.abs + travel + Math.max(30, best.dur), seq: (prev?.seq || 0) + 1, applied: false };
     if (best.plot !== p.loc.plot || !p.loc.arrived) p.loc = { plot: null, arrived: false, from: p.loc.plot };
     if (travel <= 2) { p.loc = { plot: best.plot, arrived: true }; this.onArrive(p, p.decision); }
     p.meetups = (p.meetups || []).filter(m => m.at > s.abs - 60);
@@ -302,6 +309,7 @@ export class Society {
     if (d.kind === 'shop' && d.biz) { const b = s.businesses[d.biz]; if (b && this.isOpen(b) && this.cash(p.id) >= d.price) { this.sell(b, p.id, d.price); p.happiness = clamp(p.happiness + 4, 0, 100); p.wants[d.group] = this.day + 5 + Math.floor(this.rng() * 8); } }
     if (d.kind === 'jobsearch') this.applyForJob(p, d.biz);
     if (d.kind === 'view') { p.cool.view = this.day + 2; this.learn(p, { text: `${s.plots[d.plot].address} is for sale for ${money(s.plots[d.plot].forSale?.price || 0)}`, plot: d.plot, sig: .25, src: 'witnessed' }); }
+    this.learnHabit(p, d);
   }
   sell(b, buyer, price) { this.transfer(buyer, b.id, price, 'purchase'); b.today.customers += 1; b.today.resCustomers += 1; b.today.revenue += price; this.s.today.purchases += price; }
 
@@ -334,6 +342,7 @@ export class Society {
     const firstMeet = !ra.met; ra.met = rb.met = true; ra.last = rb.last = s.abs;
     let kind = 'chat';
     if (!forced && this.rng() < tension * (.35 + (a.traits.temper + b.traits.temper) / 2) * .3 && ra.f < .65) kind = 'argument';
+    else if (a.intent?.kind === 'reconcile' && a.intent.target === b.id && a.intent.until > s.abs && (ra.rv > .1 || ra.args > 0) && this.rng() < .6) kind = 'reconcile';
     else if (ra.args > 0 && ra.rv > .06 && s.abs - (ra.lastArg || 0) > DAY && ra.f < .15 && (a.traits.kindness + b.traits.kindness) / 2 > .55 && this.rng() < .35) kind = 'reconcile';
     if (kind === 'argument') {
       both('f', -.12); both('rv', .1); both('t', -.05); ra.args++; rb.args++; ra.lastArg = rb.lastArg = s.abs;
@@ -355,7 +364,9 @@ export class Society {
       const single = !a.partner && !b.partner, ageOk = Math.abs(a.age - b.age) <= 14;
       if (single && ageOk && compat > .65 && ra.f > .3) { both('af', .045 * compat); }
       if (a.partner === b.id) both('af', .03);
-      if (single && ageOk && ra.af > .5 && rb.af > .5 && ra.f > .4 && this.rng() < .5) this.startDating(a, b, plot);
+      if (single && ageOk && ra.af > .5 && rb.af > .5 && ra.f > .4 && this.rng() < .5 && !((a.cool['romance' + b.id] || 0) > this.day)) {
+        if (!(s.ai?.enabled && this.askMind('romance', a.id, [`Ask ${b.name} out`, 'Not yet'], { key: a.id + b.id, with: b.id, ruleYes: true }, s.abs + 3 * HOUR))) this.startDating(a, b, plot);
+      }
     }
     // status labels follow the numbers
     for (const [x, y, r] of [[a, b, ra], [b, a, rb]]) r.status = x.partner === y.id ? 'partner' : r.rv > .45 ? 'rival' : r.f >= .62 ? 'close friend' : r.f >= .34 ? 'friend' : r.f > -.2 ? 'acquaintance' : 'not on good terms';
@@ -367,9 +378,9 @@ export class Society {
     if (ra.status === 'rival') announce('rival', 'social.rivalry', `A rivalry is brewing between ${a.name} and ${b.name}.`);
     if (a.partner === b.id && ra.af < .22) this.breakUp(a, b, plot);
   }
-  startDating(a, b, plot) {
+  startDating(a, b, plot, reason) {
     a.partner = b.id; b.partner = a.id;
-    this.record('social.dating', { who: [a.id, b.id], plot, text: `${a.name} and ${b.name} have started dating.`, imp: 4, impact: { af: .1, t: .1 } });
+    this.record('social.dating', { who: [a.id, b.id], plot, text: `${a.name} and ${b.name} have started dating.` + (reason ? ` (${a.name}: “${reason}”)` : ''), imp: 4, impact: { af: .1, t: .1 } });
     this.scheduleDate(a, b);
   }
   scheduleDate(a, b) {
@@ -415,6 +426,7 @@ export class Society {
     s.events.push(ev);
     if (s.events.length > 900) { const drop = s.events.findIndex(x => x.imp <= 2); s.events.splice(drop >= 0 ? drop : 0, 1); }
     if (e.quiet) return ev;
+    this.mindOnEvent(ev);
     // participants remember it themselves; anyone present witnesses it
     const sig = clamp(ev.imp / 5, .1, 1);
     for (const id of ev.who) { const p = s.people[id]; if (p) this.memo(p, { ev: ev.id, text: ev.text, who: ev.who.filter(x => x !== id), plot: ev.plot, src: 'self', sig, impact: e.impact, biz: ev.biz, bizStatus: e.bizStatus }); }
@@ -494,6 +506,8 @@ export class Society {
     s.town.approval = clamp(s.town.approval + (approvalTarget - s.town.approval) * .08, 15, 95);
     if (s.town.influence.points < 3 && day >= s.town.influence.day) { s.town.influence.points++; s.town.influence.day = day + 1; }
     this.checkBirthdays(day + 1); this.scheduleCommunity(day + 1);
+    this.lifeEvents(day);
+    for (const p of Object.values(s.people)) for (const k of Object.keys(p.habits)) { p.habits[k] = r2(p.habits[k] * .97); if (Math.abs(p.habits[k]) < .02) delete p.habits[k]; }
     const st = this.dashboard();
     s.history.push({ day, revenue: Math.round(s.today.revenue), purchases: Math.round(s.today.purchases), wages: Math.round(s.today.wages), construction: Math.round(s.today.construction), employed: st.employed, unemployed: st.unemployed, businesses: st.businesses, struggling: st.struggling, approval: Math.round(s.town.approval), treasury: Math.round(this.cash('treasury')), happiness: Math.round(hap) });
     if (s.history.length > 365) s.history.shift();
@@ -567,18 +581,34 @@ export class Society {
     const lastAsk = b.recoveries.filter(r => r.act === 'ask-friend').at(-1);
     if (p && cash < c.fixed * 8 && (!lastAsk || day - lastAsk.day >= 18)) opts.push(['ask-friend', .7 + T.sociability * .6 + (1 - T.risk) * .2, `${p.name} looks for help to keep ${b.name} afloat`]);
     if (!opts.length) return;
-    const [act] = opts.map(o => [o[0], o[1] + this.rng() * .3, o[2]]).sort((a, b) => b[1] - a[1])[0];
-    const text = opts.find(o => o[0] === act)[2];
+    const [ruleAct] = opts.map(o => [o[0], o[1] + this.rng() * .3, o[2]]).sort((a, b) => b[1] - a[1])[0];
+    b.recoveryTexts = Object.fromEntries(opts.map(o => [o[0], o[2]]));
+    b.lastRecovery = day;
+    // the owner's mind (if one is connected) gets to choose how to respond; otherwise the rules do
+    if (p && this.s.ai?.enabled) {
+      if (this.pendingMind('recovery', b.id)) return;
+      const LABEL = { 'lower-price': 'Cut prices to win customers back', 'raise-price': 'Raise prices to cover costs', repair: 'Pay to repair the worn-out equipment', 'cut-costs': 'Trim expenses', marketing: 'Run a promotion',
+        'lay-off': 'Let an employee go', 'bank-loan': 'Take out a bank loan', 'ask-friend': 'Ask a friend for money' };
+      const q = this.askMind('recovery', p.id, opts.map(o => LABEL[o[0]] || o[0]), { key: b.id, acts: opts.map(o => o[0]), ruleAct, biz: b.name, profit7: Math.round(avgProfit(b, 7)), cash: Math.round(cash), debt: Math.round(debt), trouble: b.trouble }, this.s.abs + 4 * HOUR);
+      if (q) { q.key = b.id; return; }
+    }
+    this.applyRecovery(b, ruleAct);
+  }
+  applyRecovery(b, act, reason) {
+    const s = this.s, c = CATEGORIES[b.category], p = s.people[b.owner], day = this.day;
+    if (!b || !this.isOperating(b) || !act) return;
+    const cash = this.cash(b.id), bl = s.buildings[s.plots[b.plot].building];
+    const text = b.recoveryTexts?.[act] || `${b.name} changes course`;
     b.lastRecovery = day; b.recoveries.push({ day, act });
     if (act === 'lower-price') b.priceMul = r2(Math.max(.75, b.priceMul * .92));
     if (act === 'raise-price') b.priceMul = r2(Math.min(1.3, b.priceMul * 1.06));
     if (act === 'cut-costs') { b.cutCosts = r2((b.cutCosts || 0) + .08); b.costMul = r2(b.costMul - .08); }
-    if (act === 'repair') { const amt = Math.round(c.renoCost * .6); if (this.cash(b.id) < amt) this.lend('bank', b.id, amt, 'equipment loan', .0007, 120); this.transfer(b.id, 'outside', amt, 'repairs'); bl.condition = .78; bl.repaired = true; b.costMul = r2(1 + .22 * .35 - (b.cutCosts || 0)); }
+    if (act === 'repair' && bl) { const amt = Math.round(c.renoCost * .6); if (this.cash(b.id) < amt) this.lend('bank', b.id, amt, 'equipment loan', .0007, 120); this.transfer(b.id, 'outside', amt, 'repairs'); bl.condition = .78; bl.repaired = true; b.costMul = r2(1 + .22 * .35 - (b.cutCosts || 0)); }
     if (act === 'marketing') { this.transfer(b.id, 'outside', Math.min(220, cash * .3), 'advertising'); b.marketing = 1.6; }
-    if (act === 'lay-off') { const e = s.people[b.employees[b.employees.length - 1]]; this.loseJob(e, b, 'laid off'); }
+    if (act === 'lay-off' && b.employees.length) { const e = s.people[b.employees[b.employees.length - 1]]; this.loseJob(e, b, 'laid off'); }
     if (act === 'bank-loan') this.lend('bank', b.id, 900, 'business loan', .0007, 120);
-    if (act === 'ask-friend') { const ok = this.askForHelp(p, b); if (!ok) return; }
-    this.record('business.recovery', { who: [b.owner], plot: b.plot, biz: b.id, text: text + '.', imp: act === 'bank-loan' || act === 'lay-off' ? 3 : 2, cause: `${b.trouble} days of trouble`, data: { act } });
+    if (act === 'ask-friend' && p) { const ok = this.askForHelp(p, b); if (!ok) return; }
+    this.record('business.recovery', { who: [b.owner], plot: b.plot, biz: b.id, text: text + '.' + (reason ? ` (“${reason}”)` : ''), imp: act === 'bank-loan' || act === 'lay-off' ? 3 : 2, cause: `${b.trouble} days of trouble`, data: { act, mind: !!reason } });
   }
   askForHelp(p, b, amount = 700) {
     const s = this.s;
@@ -590,12 +620,19 @@ export class Society {
     }).sort((x, y) => y.score - x.score);
     const best = cands[0];
     if (!best) { this.record('business.noHelp', { who: [p.id], plot: b.plot, biz: b.id, text: `${p.name} could find nobody able to invest in ${b.name}.`, imp: 2 }); return false; }
-    if (best.score > .62 + this.rng() * .15) {
-      const id = this.lend(best.q.id, b.id, amount, 'friendly loan', 0, 120); p.loansOwed.push({ loan: id, lender: best.q.id });
-      this.record('business.investment', { who: [best.q.id, p.id], plot: b.plot, biz: b.id, text: `${best.q.name} lent ${p.name} ${money(amount)} to keep ${b.name} going.`, imp: 3, impact: { t: .15, f: .12 }, cause: `trust ${Math.round(best.r.t * 100)}%` });
+    const payload = { key: b.id + ':' + best.q.id, lender: best.q.id, borrower: p.id, biz: b.id, amount, ruleYes: best.score > .62 + this.rng() * .15, trust: Math.round(best.r.t * 100) };
+    if (s.ai?.enabled && this.askMind('lend', best.q.id, [`Lend ${p.name} ${money(amount)}`, 'Say no'], payload, s.abs + 3 * HOUR)) return true; // they'll think it over
+    return this.resolveLoanRequest(payload, payload.ruleYes);
+  }
+  resolveLoanRequest(pl, yes, reason) {
+    const s = this.s, q = s.people[pl.lender], p = s.people[pl.borrower], b = s.businesses[pl.biz];
+    if (!q || !p || !b || !this.isOperating(b)) return false;
+    if (yes && this.cash(q.id) >= pl.amount + 100) {
+      const id = this.lend(q.id, b.id, pl.amount, 'friendly loan', 0, 120); p.loansOwed.push({ loan: id, lender: q.id });
+      this.record('business.investment', { who: [q.id, p.id], plot: b.plot, biz: b.id, text: `${q.name} lent ${p.name} ${money(pl.amount)} to keep ${b.name} going.` + (reason ? ` (“${reason}”)` : ''), imp: 3, impact: { t: .15, f: .12 }, cause: `trust ${pl.trust}%` });
       return true;
     }
-    this.record('business.refused', { who: [best.q.id, p.id], plot: b.plot, biz: b.id, text: `${best.q.name} turned down ${p.name}’s request for money to save ${b.name}.`, imp: 3, impact: { f: -.06 } });
+    this.record('business.refused', { who: [q.id, p.id], plot: b.plot, biz: b.id, text: `${q.name} turned down ${p.name}’s request for money to save ${b.name}.` + (reason ? ` (“${reason}”)` : ''), imp: 3, impact: { f: -.06 } });
     return false;
   }
   closeBusiness(b, reason) {
@@ -869,6 +906,11 @@ export class Society {
       for (const q of Object.values(s.people)) {
         const i = this.buyerInterest(q, plot); if (!i) continue;
         if (i.short) { if ((q.cool['short' + plot.id] || 0) <= day && i.max > price * .5) { q.cool['short' + plot.id] = day + 10; this.record('property.cantAfford', { who: [q.id], plot: plot.id, text: `${q.name} wanted to buy ${plot.address} but couldn’t raise ${money(price)}.`, imp: 2 }); } continue; }
+        if (s.ai?.enabled) { // a connected mind decides whether this resident really wants to make an offer
+          const adv = q.aiBids[plot.id];
+          if (!adv || day - adv.day > 7) { this.askMind('bid', q.id, [`Make an offer on ${plot.address}`, 'Pass for now'], { key: plot.id + ':' + q.id, plot: plot.id, price, max: i.max, plan: CATEGORIES[i.cat]?.label }, s.abs + 20 * HOUR); continue; }
+          if (!adv.yes) continue;
+        }
         bids.push({ buyer: q.id, max: i.max, cat: i.cat });
       }
       // outside investors step in for properties nobody local wants
@@ -1228,7 +1270,9 @@ export class Society {
     const A = AMBITIONS[p.ambition.key], job = p.job, emp = job && job.employer.startsWith('B') ? s.businesses[job.employer] : null;
     const rels = Object.entries(p.rel).filter(([, r]) => r.met).map(([id, r]) => ({ id, name: s.people[id].name, status: r.status, friendship: Math.round(r.f * 100), trust: Math.round(r.t * 100), affection: Math.round(r.af * 100), rivalry: Math.round(r.rv * 100) })).sort((a, b) => b.friendship - a.friendship);
     const important = p.memories.filter(m => m.sig >= .4).slice(0, 8);
-    return { id: p.id, name: p.full, short: p.name, age: p.age, stage: p.stage, bio: p.bio, traits: p.traits, personality: this.personality(p), occupation: p.occupation, job: job ? { role: job.role, where: emp ? emp.name : job.employer === 'town' ? 'Town Hall' : 'self-employed', since: job.since } : null, cash: Math.round(this.cash(p.id)), debt: Math.round(this.debtOf(p.id)), home: s.plots[p.home].address, homeName: this.plotName(p.home), owns: Object.values(s.plots).filter(pl => pl.owner === p.id).map(pl => ({ id: pl.id, address: pl.address, name: this.plotName(pl.id) })), businesses: Object.values(s.businesses).filter(b => b.owner === p.id && this.isOperating(b)).map(b => b.name), relationships: rels, partner: p.partner ? s.people[p.partner].name : null, ambition: { label: A.label, milestones: A.milestones.map(m => ({ label: MILESTONE_LABELS[m], done: p.ambition.done.includes(m) })), progress: Math.round(100 * p.ambition.done.length / A.milestones.length) }, worries: p.worries.slice(), happiness: Math.round(p.happiness), stress: Math.round(p.stress), decision: p.decision ? { label: p.decision.label, reason: p.decision.reason } : null, memories: important, timeline: p.timeline.slice().reverse(), career: p.career.slice().reverse() };
+    return { id: p.id, name: p.full, short: p.name, age: p.age, stage: p.stage, bio: p.bio, traits: p.traits, personality: this.personality(p), occupation: p.occupation, job: job ? { role: job.role, where: emp ? emp.name : job.employer === 'town' ? 'Town Hall' : 'self-employed', since: job.since } : null, cash: Math.round(this.cash(p.id)), debt: Math.round(this.debtOf(p.id)), home: s.plots[p.home].address, homeName: this.plotName(p.home), owns: Object.values(s.plots).filter(pl => pl.owner === p.id).map(pl => ({ id: pl.id, address: pl.address, name: this.plotName(pl.id) })), businesses: Object.values(s.businesses).filter(b => b.owner === p.id && this.isOperating(b)).map(b => b.name), relationships: rels, partner: p.partner ? s.people[p.partner].name : null, ambition: { label: A.label, milestones: A.milestones.map(m => ({ label: MILESTONE_LABELS[m], done: p.ambition.done.includes(m) })), progress: Math.round(100 * p.ambition.done.length / A.milestones.length) }, worries: p.worries.slice(), happiness: Math.round(p.happiness), stress: Math.round(p.stress), decision: p.decision ? { label: p.decision.label, reason: p.decision.reason } : null, memories: important, timeline: p.timeline.slice().reverse(), career: p.career.slice().reverse(),
+      mood: this.moodWord(p), intent: p.intent && p.intent.until > this.s.abs ? { label: p.intent.label, reason: p.intent.reason, source: p.intent.source } : null,
+      diary: p.diary.slice().reverse(), changes: this.traitChanges(p), sick: p.sickUntil > this.s.abs, habits: Object.entries(p.habits).sort((a, b) => b[1] - a[1]).slice(0, 3).filter(([, v]) => v > .1).map(([k]) => { const [pl, kind] = k.split(':'); return `${kind} at ${this.plotName(pl)}`; }) };
   }
   personality(p) {
     const t = p.traits, words = [];
@@ -1277,7 +1321,7 @@ export class Society {
   toJSON() { return this.s; }
   static fromJSON(obj) {
     if (!obj || typeof obj !== 'object' || obj.format !== SAVE_FORMAT || !obj.people || !obj.plots || !obj.accounts) throw new Error('not a v5 society state');
-    return new Society(obj);
+    return new Society(ensureMinds(obj));
   }
   // Older saves (v0.1/v0.2) had needs, friendships and memories only: build a fresh society around them.
   static migrate(old, seed) {
@@ -1294,4 +1338,5 @@ export class Society {
     return S;
   }
 }
+Object.assign(Society.prototype, MindMixin);
 export { CATEGORIES, PLOTS, PEOPLE, AMBITIONS, MILESTONE_LABELS, DAY, HOUR, WEEKDAYS, weekday, dayOf, hourOf };
