@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.6.0 — Living Minds
+Residents become less predictable, and can optionally be driven by a language model running on your own computer.
+
+### Inner lives (always on, no AI needed) — `src/sim/minds.js`
+- Choices are made by weighted chance instead of always taking the top score; daring, creative residents go off-script more.
+- A daily intention for each resident (work, goal, friend, partner, meet someone, reconcile or avoid a rival, treat yourself, rest, explore, opportunities) that shapes the day; plans with others can fall through.
+- Moods that react to events, personalities that drift with experience (bounded ±0.25), habits learned from what went well, occasional whims.
+- Rare life events: windfalls, unexpected bills, colds, visiting relatives, new hobbies, second thoughts about stalled goals (all money accounted for).
+- Nightly diary entries in the resident journal; the journal also shows today's plan, mood, recent personality shifts and favourite haunts.
+
+### AI residents (optional, local) — `src/ai/mind.js`
+- Works with Ollama, LM Studio, llama.cpp or any OpenAI-compatible server on your machine; nothing goes to the internet.
+- The model picks daily intentions and makes big decisions (business recovery, lending money, bidding on property, asking someone out), writes diaries, and voices short conversations shown as speech bubbles.
+- The simulation offers only valid options, validates every answer, and falls back to its rules on deadlines, errors or nonsense; the town never waits on the model.
+- Settings → AI residents (model server, model, Test connection); Town → Overview shows AI activity.
+- `npm run serve` (`tools/serve.mjs`): local server with an `/ai` proxy so no CORS setup is needed and phones on the same Wi-Fi can play with AI.
+
+### Tests
+- New Node tests for intentions, weighted choices, whims, moods and drift, habits, life events, diaries, and the AI queue (valid, invalid, late and missing answers; passing on bids; mind off = rules only); a test for the local server's proxy; a browser test against a stand-in model server.
+
 ## v0.5.0 — The Living World Update
 Willowbrook stops being a backdrop and becomes a small society that changes on its own. Everything below is simulated locally — no paid AI services, no network calls beyond loading Three.js.
 
