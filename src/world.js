@@ -835,11 +835,11 @@ export function buildWorld(scene, sites, opts = {}) {
     if (daylight > .02) { sun.position.set(Math.cos(s * PI) * 42, 8 + elev * 42, 24); sunCol.set(0xffa66e).lerp(tmpC.set(0xfff2dc), Math.min(1, elev * 1.6)); }
     else { sun.position.set(-22, 40, 18); sunCol.set(0x8fa6ff); }
     sun.color.copy(sunCol); sun.intensity = .32 + daylight * 2.35;
-    hemi.intensity = .72 + daylight * .55; hemi.color.set(0x2c3f72).lerp(tmpC.set(0xdff0ff), daylight); hemi.groundColor.set(0x1d2b2a).lerp(tmpC.set(0x7a9a63), daylight);
+    hemi.intensity = .95 + daylight * .32; hemi.color.set(0x3a4f86).lerp(tmpC.set(0xdff0ff), daylight); hemi.groundColor.set(0x1d2b2a).lerp(tmpC.set(0x7a9a63), daylight);
     fill.intensity = .15 + daylight * .25;
     for (const g of glowMats) g.emissiveIntensity = state.night * 1.35; poolMat.opacity = state.night * .85;
     skyAt(h); const css = `linear-gradient(to bottom, #${cTop.getHexString()} 0%, #${cBot.getHexString()} 100%)`;
-    if (css !== lastSky && opts.skyEl) { opts.skyEl.style.background = css; lastSky = css; }
+    if (css !== lastSky && opts.skyEl) { opts.skyEl.style.background = css; lastSky = css; opts.onSky?.('#' + cTop.getHexString()); }
     // ambient motion (real time)
     sway.value = t;
     for (const w of waters) w.material.emissiveIntensity = .22 + Math.sin(t * 2.2) * .05;

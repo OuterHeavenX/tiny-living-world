@@ -379,7 +379,11 @@ const mat = c => new THREE.MeshStandardMaterial({ color: c, roughness: .92 });
 const skin = mat(0xffcfad);
 // Simulation destinations — unchanged from v0.1 (residents walk to these points).
 const sites = [[-20,-20,'Oliver’s Cottage',0xbad2ab],[-7,-20,'Emma’s House',0xe8bbc5],[7,-20,'Sarah’s House',0xb0cbe3],[21,-20,'Shared House',0xc6d4a8],[-20,0,'Sunrise Bakery',0xe8b37e],[-7,0,'Willowbrook Park',0x78b883],[7,0,'Petal & Stem',0xd5abc8],[21,0,'Corner Café',0xc9a991],[7,20,'Town Hall',0xa8b8dc]];
-const world = buildWorld(scene, sites, { shadows: settings.shadows, skyEl: $('scene'), shadowMapSize: 2048 });
+// Keep the phone's status-bar area the same colour as the sky (Safari tints it from theme-color / the page background).
+const themeMeta = document.querySelector('meta[name="theme-color"]');
+let lastSkyTop = '';
+function onSky(top) { if (top === lastSkyTop) return; lastSkyTop = top; themeMeta.setAttribute('content', top); document.documentElement.style.backgroundColor = top; document.body.style.backgroundColor = top; }
+const world = buildWorld(scene, sites, { shadows: settings.shadows, skyEl: $('scene'), shadowMapSize: 2048, onSky });
 const sun = world.sun;
 /* ---------- graphics quality (adaptive) ---------- */
 const QUALITY = { high: { pr: 2, shadow: 2048 }, medium: { pr: 1.5, shadow: 1024 }, low: { pr: 1, shadow: 0 } };
