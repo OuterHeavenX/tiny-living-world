@@ -134,6 +134,81 @@ select option{color:#000}
 #settings .stack button{min-height:46px;font-size:15px}
 body:not(.in-game) .ingame-only{display:none}
 
+/* ---------- v0.5: town panel, place panel, journal ---------- */
+.panel{position:absolute;left:0;right:0;bottom:0;margin:0 auto;width:min(560px,100%);max-height:min(74dvh,640px);display:flex;flex-direction:column;border-radius:20px 20px 0 0;border-bottom:0;padding:2px calc(12px + var(--sar)) calc(10px + var(--sab)) calc(12px + var(--sal));transform:translateY(105%);visibility:hidden;transition:transform .28s cubic-bezier(.2,.8,.2,1),visibility 0s .28s}
+.panel.open{transform:translateY(0);visibility:visible;transition:transform .28s cubic-bezier(.2,.8,.2,1)}
+#place{max-height:min(46dvh,420px)}
+#place.expanded{max-height:min(78dvh,680px)}
+.panel .grab{all:unset;display:block;width:100%;height:18px;cursor:grab;touch-action:none;flex:none}
+.panel .grab::after{content:"";display:block;margin:6px auto 0;width:38px;height:5px;border-radius:3px;background:rgba(255,255,255,.35)}
+.phead{display:flex;align-items:center;gap:8px;flex:none}
+.phead .who{flex:1;min-width:0}
+.phead .who b{display:block;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.phead .who small{color:var(--muted);font-size:12.5px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.phead button{background:rgba(255,255,255,.1);color:#fff;padding:0 10px}
+.tabs{display:flex;gap:4px;margin:6px 0 8px;overflow-x:auto;flex:none;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{min-height:36px;padding:0 12px;font-size:13px;background:rgba(255,255,255,.1);color:#fff;border-radius:10px;white-space:nowrap}
+.tabs button[aria-selected="true"]{background:var(--accent);color:#2b2414}
+.pbody{overflow:auto;flex:1;min-height:0;font-size:13px;-webkit-user-select:text;user-select:text;overscroll-behavior:contain;padding-bottom:4px}
+.pbody h4,#sMore h4{margin:12px 0 5px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px}
+.tile{background:rgba(255,255,255,.08);border-radius:12px;padding:7px 9px;min-width:0}
+.tile b{display:block;font-size:18px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tile small{color:var(--muted);font-size:11px}
+.chip{display:inline-block;padding:1px 8px;border-radius:9px;font-size:11px;font-weight:700;background:rgba(255,255,255,.14);vertical-align:1px;white-space:nowrap}
+.chip.good{background:#3f7f4f}.chip.warn{background:#9a6a2a}.chip.bad{background:#8a3b3b}.chip.info{background:#2f5f8a}
+.link{all:unset;color:#ffe08a;text-decoration:underline;text-decoration-color:rgba(255,224,138,.45);cursor:pointer;font-weight:650}
+.link:focus-visible{outline:2px solid #77d3ef}
+.list{list-style:none;margin:0;padding:0}
+.list li{padding:7px 0;border-top:1px solid rgba(255,255,255,.08)}
+.list li small{color:var(--muted)}
+.list li.place{display:flex;gap:8px;align-items:center;cursor:pointer}
+.list li.place > span:first-child{flex:1;min-width:0}
+.list li.place .chip{flex:none}
+.paper{background:#f6f1e3;color:#2a2620;border-radius:12px;padding:12px 14px;font-family:Georgia,"Times New Roman",serif}
+.paper .mast{text-align:center;border-bottom:3px double #2a2620;padding-bottom:6px;margin-bottom:6px}
+.paper .mast b{font-size:22px;letter-spacing:.01em;display:block}
+.paper .mast small{font:600 11px system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#6a6152}
+.paper h3{margin:12px 0 3px;font-size:16.5px;line-height:1.2}
+.paper h3.lead{font-size:20px}
+.paper p{margin:0 0 6px;font-size:13.5px;line-height:1.4}
+.paper .link{color:#7a3b1d;text-decoration-color:rgba(122,59,29,.4)}
+.paper .facts{border-top:1px solid #c9bfa9;margin-top:10px;padding-top:6px;font:12.5px/1.4 system-ui,sans-serif;color:#4a4236}
+.paper .facts div::before{content:"▸ ";color:#a07a3a}
+.pnav{display:flex;align-items:center;gap:6px;margin-top:8px}
+.pnav span{flex:1;text-align:center;color:var(--muted);font-size:12px}
+.pnav button{min-height:38px;background:rgba(255,255,255,.1);color:#fff}
+.prog{height:8px;border-radius:4px;background:rgba(255,255,255,.14);overflow:hidden;margin:4px 0}
+.prog i{display:block;height:100%;background:var(--accent);transition:width .4s}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.spark{width:100%;height:46px;display:block}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.chart{background:rgba(255,255,255,.06);border-radius:12px;padding:6px 8px}
+.chart small{color:var(--muted);font-size:11px}
+.modes{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.modes button{min-height:52px;flex-direction:column;gap:0;background:rgba(255,255,255,.1);color:#fff;font-size:13.5px}
+.modes button small{font-weight:500;font-size:11px;color:var(--muted)}
+.modes button[aria-pressed="true"]{background:var(--accent);color:#2b2414}
+.modes button[aria-pressed="true"] small{color:#5a4a20}
+.act{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 0;border-top:1px solid rgba(255,255,255,.08)}
+.act label{flex:1 1 100%;font-weight:700}
+.act label small{display:block;font-weight:400;color:var(--muted)}
+.act select{flex:1 1 40%;min-width:0;min-height:38px}
+.act button{min-height:38px;background:rgba(255,255,255,.14);color:#fff}
+.act button.primary{background:var(--accent);color:#2b2414}
+#modeMsg{min-height:1.2em;color:#ffe08a;font-size:12.5px;margin:6px 0}
+#plotChip{position:absolute;left:0;top:0;transform:translate(-50%,-100%);padding:4px 10px;border-radius:10px;font-size:12px;font-weight:700;pointer-events:none;white-space:nowrap;display:none}
+#plotChip .prog{width:110px;margin:3px 0 0}
+body.panel-open #dock,body.panel-open #ticker{opacity:0;pointer-events:none;transform:translateX(-50%) translateY(20px)}
+#sWhy{margin:0 0 6px;font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#sMore .tabs{margin-top:2px}
+.sec[hidden]{display:none}
+#summary .card{max-height:100%;overflow:auto}
+#summary ul{padding-left:18px;margin:6px 0 12px;font-size:13.5px}
+@media (orientation:landscape) and (max-height:500px){ .panel{max-height:86dvh;width:min(520px,60vw);left:auto;right:calc(var(--sar) + 8px);border-radius:20px 20px 0 0} #place{max-height:62dvh} }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 @media (orientation:landscape) and (max-height:500px){
   #ticker{left:auto;right:calc(var(--sar) + var(--edge));bottom:max(10px,calc(var(--sab) + 4px));transform:translateY(8px);max-width:min(300px,36vw)}
@@ -159,12 +234,13 @@ body:not(.in-game) .ingame-only{display:none}
     <button id="speed" aria-label="Simulation speed">1×</button>
     <button id="menu" aria-label="Menu and settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
   </div>
-  <div id="hint" class="glass">Drag to orbit · Pinch to zoom · Tap a resident</div>
+  <div id="hint" class="glass">Drag to orbit · Pinch to zoom · Tap a resident or building</div>
   <div id="toast" class="glass" role="status"></div>
   <button id="ticker" aria-label="Latest town news — open happenings" tabindex="-1"><span aria-hidden="true">📰</span><span id="tickerText"></span></button>
   <div id="dock" class="pill glass">
+    <button id="townBtn" aria-label="Town: dashboard, newspaper, places and play modes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 5h13v14H6a2 2 0 0 1-2-2z"/><path d="M17 8h3v9a2 2 0 0 1-2 2"/><path d="M7 9h7M7 12.5h7M7 16h4"/></svg>Town</button>
     <button id="people" aria-label="Show residents"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c.6-3.4 3-5.5 6-5.5s5.4 2.1 6 5.5"/><circle cx="17" cy="9" r="2.6"/><path d="M16.5 14.6c2.4.2 4.1 2 4.5 4.9"/></svg>People</button>
-    <button id="resetCam" aria-label="Reset camera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/></svg>Reset view</button>
+    <button id="resetCam" aria-label="Reset camera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/></svg>View</button>
     <button id="save" aria-label="Save town"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg>Save</button>
   </div>
 
@@ -178,6 +254,7 @@ body:not(.in-game) .ingame-only{display:none}
       <button id="sClose" aria-label="Close">✕</button>
     </div>
     <p id="sActivity"></p>
+    <p id="sWhy"></p>
     <p id="sGoal"></p>
     <div class="stats">
       <div class="stat"><div>Energy<em id="sEnergyV"></em></div><div class="bar" id="sEnergyB"><i></i></div></div>
@@ -185,8 +262,28 @@ body:not(.in-game) .ingame-only{display:none}
       <div class="stat"><div>Social<em id="sSocialV"></em></div><div class="bar" id="sSocialB"><i></i></div></div>
     </div>
     <p id="sMemory"></p>
-    <div id="sMore"><h4>Important memories</h4><ul id="sMemList"></ul><h4>Friends</h4><ul id="sFriendList"></ul></div>
+    <div id="sMore">
+      <div class="tabs" role="tablist" id="sTabs"><button role="tab" data-tab="life" aria-selected="true">Life</button><button role="tab" data-tab="people" aria-selected="false">People</button><button role="tab" data-tab="memories" aria-selected="false">Memories</button><button role="tab" data-tab="story" aria-selected="false">Journal</button></div>
+      <div class="sec" data-sec="life" id="sLife"></div>
+      <div class="sec" data-sec="people" hidden><h4>Relationships</h4><ul id="sFriendList"></ul></div>
+      <div class="sec" data-sec="memories" hidden><h4>Important memories</h4><ul id="sMemList"></ul></div>
+      <div class="sec" data-sec="story" id="sStory" hidden></div>
+    </div>
   </div>
+
+  <div id="town" class="panel glass" role="dialog" aria-label="Willowbrook town" aria-hidden="true">
+    <button class="grab" id="townGrab" aria-label="Close town panel"></button>
+    <div class="phead"><div class="who"><b>Willowbrook</b><small id="townSub"></small></div><button id="townClose" aria-label="Close">✕</button></div>
+    <div class="tabs" role="tablist" id="townTabs"><button role="tab" data-tab="overview" aria-selected="true">Overview</button><button role="tab" data-tab="times" aria-selected="false">The Times</button><button role="tab" data-tab="places" aria-selected="false">Places</button><button role="tab" data-tab="play" aria-selected="false">Play</button></div>
+    <div class="pbody" id="townBody"></div>
+  </div>
+
+  <div id="place" class="panel glass" role="dialog" aria-label="Property details" aria-hidden="true">
+    <button class="grab" id="placeGrab" aria-label="Expand or collapse property details"></button>
+    <div class="phead"><div class="who"><b id="pName"></b><small id="pSub"></small></div><button id="pClose" aria-label="Close">✕</button></div>
+    <div class="pbody" id="placeBody"></div>
+  </div>
+  <div id="plotChip" class="glass" aria-hidden="true"></div>
 </div>
 
 <div id="welcome" class="overlay">
@@ -194,7 +291,7 @@ body:not(.in-game) .ingame-only{display:none}
     <div class="brand">
       <div class="kicker">🌳 Willowbrook</div>
       <h1>Tiny Living World</h1>
-      <p>A little town of eight residents, living their lives.</p>
+      <p>Eight residents with jobs, money, ambitions and a town that changes around them.</p>
     </div>
     <div class="stack">
       <p id="saveInfo"></p>
@@ -202,7 +299,16 @@ body:not(.in-game) .ingame-only{display:none}
       <button id="btnNew">New Game</button>
       <button id="btnSettings" class="ghost">Settings</button>
     </div>
-    <p class="ver" id="verWelcome">v0.2.0</p>
+    <p class="ver" id="verWelcome">v0.5.0</p>
+  </div>
+</div>
+
+<div id="summary" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="sumTitle">
+  <div class="card glass">
+    <div class="set-head"><h2 id="sumTitle">While you were away</h2></div>
+    <p id="sumText" style="margin:0;color:var(--muted);font-size:13.5px"></p>
+    <ul id="sumList"></ul>
+    <div class="stack"><button id="sumOk" class="primary">Back to Willowbrook</button></div>
   </div>
 </div>
 
@@ -213,22 +319,27 @@ body:not(.in-game) .ingame-only{display:none}
     <div class="row"><label for="optQuality">Graphics<small id="qualityNote">Auto adjusts to keep play smooth</small></label><select id="optQuality"><option value="auto">Auto</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></div>
     <div class="row"><label for="optShadows">Shadows<small>Turn off for better battery life</small></label><input id="optShadows" class="switch" type="checkbox"></div>
     <div class="row"><label for="optAutosave">Autosave<small>Every 2 minutes and when you leave</small></label><input id="optAutosave" class="switch" type="checkbox"></div>
+    <div class="row"><label for="optOffline">Offline progress<small>Let the town live on while you’re away (up to 3 days)</small></label><input id="optOffline" class="switch" type="checkbox"></div>
     <div class="row"><label for="optHints">Gesture hints<small>Show controls tip when play starts</small></label><input id="optHints" class="switch" type="checkbox"></div>
     <div class="stack">
       <button id="setSave" class="ingame-only">Save town now</button>
       <button id="setTitleBtn" class="ghost ingame-only">Return to title screen</button>
+      <button id="setExport" class="ghost">Export save file</button>
+      <button id="setImport" class="ghost">Import save file</button>
+      <input id="importFile" type="file" accept="application/json,.json" hidden>
       <button id="setDelete" class="danger">Delete saved town</button>
     </div>
-    <p class="ver" id="verSettings">Tiny Living World v0.2.0</p>
+    <p class="ver" id="verSettings">Tiny Living World v0.5.0</p>
   </div>
 </div>
 
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
 import { buildWorld } from './src/world.js';
-import { buildCharacter, animateCharacter, makeBubble, createNav, insideFootprint, FOOTPRINTS, segmentBlocked, moodOf } from './src/residents.js';
+import { buildCharacter, animateCharacter, makeBubble, createNav, insideFootprint, FOOTPRINTS, segmentBlocked, moodOf, setDynamicFootprint } from './src/residents.js';
+import { Society, SAVE_FORMAT, money, CATEGORIES, AMBITIONS, DAY, WEEKDAYS, weekday } from './src/sim/society.js';
 
-const GAME_VERSION = '0.2.0';
+const GAME_VERSION = '0.5.0';
 const SAVE_KEY = 'tlw-save';          // unchanged from v0.1 so existing saves keep working
 const SETTINGS_KEY = 'tlw-settings';
 const $ = id => document.getElementById(id);
@@ -236,7 +347,7 @@ const readJSON = k => { try { return JSON.parse(localStorage.getItem(k) || 'null
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 /* ================= Settings ================= */
-const DEFAULT_SETTINGS = { sensitivity: 1, shadows: true, autosave: true, hints: true, quality: 'auto' };
+const DEFAULT_SETTINGS = { sensitivity: 1, shadows: true, autosave: true, hints: true, quality: 'auto', offline: false };
 const settings = { ...DEFAULT_SETTINGS, ...(readJSON(SETTINGS_KEY) || {}) };
 function writeSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch {} }
 
@@ -248,6 +359,7 @@ renderer.setClearColor(0x000000, 0);
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5)); renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+renderer.localClippingEnabled = true; // staged demolition and construction cut buildings to height
 $('scene').appendChild(renderer.domElement);
 const mat = c => new THREE.MeshStandardMaterial({ color: c, roughness: .92 });
 const skin = mat(0xffcfad);
@@ -280,17 +392,31 @@ function watchPerformance(realDt) {
 }
 
 /* ================= Residents ================= */
-// name, job, (v0.1 colour), home x, home z — homes and schedules are unchanged from v0.1
+// name, (v0.1 colour), home x, home z — the eight residents of Willowbrook (R1…R8 in the society simulation)
 const data = [['Oliver','Baker',0x4e839a,-20,-20],['Emma','Florist',0xdb7993,-7,-20],['Sarah','Journalist',0x866eb1,7,-20],['Marcus','Mayor',0x627d65,7,20],['Mia','Café owner',0xde9b5b,21,0],['Noah','Mechanic',0x5677b2,21,-20],['Lily','Artist',0xa96d97,-7,0],['Ethan','Job seeker',0x9d854d,7,0]];
 const nav = createNav();
 const siteIndexAt = (x, z) => { let best = 0, bd = Infinity; sites.forEach((s, i) => { const d = Math.hypot(s[0] - x, s[1] - z); if (d < bd) { bd = d; best = i; } }); return best; };
+const SITE_POS = [...sites.map(s => [s[0], s[1]]), [-6.5, 20.5], [22.5, 20.5], [-23, 21]]; // 0–8 buildings, 9 garden lot, 10 orchard lot, 11 duck pond
+const SITE_NAME = i => i < sites.length ? sites[i][2] : ['Community Garden', 'Old Orchard', 'Duck Pond'][i - sites.length];
+
+/* ---------- the society simulation (src/sim) owns time, needs, money, decisions and history ---------- */
+let society = Society.create(newSeed());
+function newSeed() { return (Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0; }
+const person = r => society.s.people[r.pid];
 const residents = data.map(([name, job, color, x, z], i) => {
   const ch = buildCharacter(name); scene.add(ch.root);
   const bubble = makeBubble(); ch.root.add(bubble);
-  return { name, job, color: ch.swatch, g: ch.root, rig: ch.rig, hit: ch.hit, bubble, home: [x, z], dest: [x, z], energy: 70 + Math.random() * 25, social: 40 + Math.random() * 40, hunger: 70 + Math.random() * 20, friendships: {}, memories: [], state: 'Starting the day', next: 0, id: i,
+  const r = { name, pid: 'R' + (i + 1), color: ch.swatch, g: ch.root, rig: ch.rig, hit: ch.hit, bubble, home: [x, z], dest: [x, z], state: 'Starting the day', reason: '', id: i, decSeq: -1,
     homeSite: siteIndexAt(x, z), pos: new THREE.Vector3(x, 0, z), prev: new THREE.Vector3(x, 0, z), path: [], pi: 0, inside: -1, enterAt: -1, site: -1, spot: null, atSpot: false,
     talkUntil: -1, talkWith: null, talkKind: null, walking: false, walkW: 0, phase: 0, yaw: 0, faceYaw: 0, lastX: x, lastZ: z, thoughtAt: 4 + i * 1.3 };
+  // needs live in the simulation; these accessors keep the v0.2 visuals and mood code unchanged
+  for (const k of ['energy', 'hunger', 'social']) Object.defineProperty(r, k, { get: () => person(r).needs[k], set: v => { person(r).needs[k] = clamp(v, 0, 100); }, enumerable: true });
+  Object.defineProperty(r, 'job', { get: () => person(r).occupation });
+  Object.defineProperty(r, 'friendships', { get: () => Object.fromEntries(Object.entries(person(r).rel).filter(([, x]) => x.chats > 0).map(([id, x]) => [society.s.people[id].name, x.chats])) });
+  Object.defineProperty(r, 'memories', { get: () => person(r).memories.map(m => m.text) });
+  return r;
 });
+const byPid = pid => residents[+pid.slice(1) - 1];
 function releaseSpot(r) { if (r.spot) { r.spot.owner = -1; r.spot = null; } r.atSpot = false; }
 // Put a resident at a position; anyone standing inside a building (e.g. v0.1 saves) is moved to its door, indoors.
 function placeAt(r, x, z, y = 0) {
@@ -302,14 +428,21 @@ function placeAt(r, x, z, y = 0) {
 }
 residents.forEach(r => placeAt(r, r.home[0], r.home[1]));
 
-// Selection ring (UI affordance only; resident models unchanged)
+// Selection ring (UI affordance only)
 const ring = new THREE.Mesh(new THREE.RingGeometry(.75, .95, 32), new THREE.MeshBasicMaterial({ color: 0xfff4c2, transparent: true, opacity: .9, depthWrite: false }));
 ring.rotation.x = -Math.PI / 2; ring.visible = false; scene.add(ring);
 
+/* ---------- construction crews: lightweight visitors who come to work on projects ---------- */
+const workers = [0, 1, 2, 3].map(i => { const ch = buildCharacter(i % 2 ? 'Worker2' : 'Worker'); ch.root.visible = false; scene.add(ch.root); return { id: 20 + i, g: ch.root, rig: ch.rig, pos: new THREE.Vector3(), prev: new THREE.Vector3(), path: [], pi: 0, walking: false, walkW: 0, phase: 0, yaw: 0, faceYaw: 0, lastX: 0, lastZ: 0, job: null, state: 'off', pose: 'idle' }; });
+const CREW_ENTRY = [[-30.5, 5.55], [30.5, 10.45], [-30.5, -7.55], [30.5, -12.45]];
+
 /* ================= Simulation state + save/load ================= */
-let minutes = 480, day = 1, speed = 1, paused = false, selected = null, follow = false, events = ['Welcome to Willowbrook!'], lastSocial = 0;
+let minutes = 480, day = 1, speed = 1, paused = false, selected = null, follow = false, events = ['Welcome to Willowbrook!'];
 let started = false;        // simulation running (not on title)
 let sessionStarted = false; // player has entered the game this page session
+let lastEventSeq = 0, seenEdition = 0, selectedPlot = null;
+function syncClock() { minutes = society.s.abs % DAY; day = Math.floor(society.s.abs / DAY) + 1; }
+syncClock();
 
 // Read the save defensively: unreadable data is backed up (never silently discarded) and every value is range-checked.
 const SAVE_BACKUP_KEY = 'tlw-save-prev', SAVE_CORRUPT_KEY = 'tlw-save-unreadable';
@@ -326,43 +459,100 @@ function sanitizeSave(s) {
   return { ...s, minutes: num(s.minutes, 480, 0, 1439.9), day: Math.floor(num(s.day, 1, 1, 1e6)),
     events: Array.isArray(s.events) ? s.events.filter(e => typeof e === 'string').slice(0, 25) : ['Welcome to Willowbrook!'],
     residents: Array.isArray(s.residents) ? s.residents.filter(v => v && typeof v === 'object').map(v => ({ ...v,
-      x: num(v.x, NaN, -31.5, 31.5), z: num(v.z, NaN, -31.5, 31.5), y: num(v.y, 0, 0, 2), inside: Number.isInteger(v.inside) && v.inside >= -1 && v.inside < sites.length ? v.inside : undefined,
+      x: num(v.x, NaN, -31.5, 31.5), z: num(v.z, NaN, -31.5, 31.5), y: num(v.y, 0, 0, 2), inside: Number.isInteger(v.inside) && v.inside >= -1 && v.inside < nav.sites.length ? v.inside : undefined,
       energy: num(v.energy, 75, 0, 100), social: num(v.social, 60, 0, 100), hunger: num(v.hunger, 75, 0, 100),
       friendships: v.friendships && typeof v.friendships === 'object' ? Object.fromEntries(Object.entries(v.friendships).filter(([n, c]) => data.some(d => d[0] === n) && Number.isFinite(c) && c >= 0)) : {},
       memories: Array.isArray(v.memories) ? v.memories.filter(m => typeof m === 'string').slice(0, 6) : [] })) : [] };
 }
+// Society state from a save: v0.5 saves carry it; v0.1/v0.2 saves are migrated (needs, friendships, memories kept).
+function societyFrom(saved) {
+  if (saved?.saveFormat >= 5 && saved.society) {
+    try { const S = Society.fromJSON(saved.society); const bad = S.checkInvariants(); if (bad.length) console.warn('Save loaded with issues:', bad); return S; }
+    catch (e) { console.warn('Could not read the town in this save; starting over from its basics', e); saveProblem = 'repaired'; }
+  }
+  return saved ? Society.migrate(saved, newSeed()) : Society.create(newSeed());
+}
 function applySave(saved) {
   if (saved) saved = sanitizeSave(saved);
-  minutes = saved?.minutes ?? 480; day = saved?.day ?? 1; events = saved?.events ?? ['Welcome to Willowbrook!'];
+  society = societyFrom(saved); syncClock();
+  events = saved?.events ?? ['Welcome to Willowbrook!'];
+  lastEventSeq = society.s.seq.ev; seenEdition = saved?.seenEdition ?? society.s.seq.ed;
+  residents.forEach(r => { r.decSeq = -1; });
   if (saved?.residents) saved.residents.forEach((v, i) => { const r = residents[i]; if (!r || v.name !== r.name) return;
     if (!Number.isFinite(v.x) || !Number.isFinite(v.z)) { v.x = r.home[0]; v.z = r.home[1]; v.inside = undefined; }
-    if (saved.saveFormat >= 2 && typeof v.inside === 'number') { placeAt(r, v.x, v.z, v.y || 0); if (v.inside >= 0) { const e = nav.node(nav.sites[v.inside].E); r.pos.set(e.x, e.y, e.z); r.prev.copy(r.pos); r.inside = v.inside; } else if (insideFootprint(v.x, v.z)) placeAt(r, v.x, v.z); }
+    if (saved.saveFormat >= 2 && typeof v.inside === 'number') { placeAt(r, v.x, v.z, v.y || 0); if (v.inside >= 0 && nav.sites[v.inside]) { const e = nav.node(nav.sites[v.inside].E); r.pos.set(e.x, e.y, e.z); r.prev.copy(r.pos); r.inside = v.inside; } else if (insideFootprint(v.x, v.z)) placeAt(r, v.x, v.z); }
     else placeAt(r, v.x, v.z); // v0.1 save: migrate people standing inside buildings to the door
-    r.energy = v.energy; r.social = v.social; r.hunger = v.hunger; r.friendships = v.friendships || {}; r.memories = v.memories || []; });
-  renderEvents();
+    if (!(saved.saveFormat >= 5)) { r.energy = v.energy; r.social = v.social; r.hunger = v.hunger; }
+  });
+  else residents.forEach(r => placeAt(r, r.home[0], r.home[1]));
+  if (saved?.saveFormat >= 5) residents.forEach((r, i) => { const p = saved.residents?.[i]; if (p && Number.isInteger(p.site) && p.site >= 0 && nav.sites[p.site]) { r.site = p.site; r.state = person(r).decision?.label || r.state; } });
+  syncPlots(true); renderEvents();
 }
 function resetWorld() {
-  minutes = 480; day = 1; events = ['Welcome to Willowbrook!']; lastSocial = 0;
-  for (const r of residents) { placeAt(r, r.home[0], r.home[1]); r.yaw = r.faceYaw = 0; r.dest = [...r.home]; r.energy = 70 + Math.random() * 25; r.social = 40 + Math.random() * 40; r.hunger = 70 + Math.random() * 20; r.friendships = {}; r.memories = []; r.state = 'Starting the day'; r.next = 0; }
-  closeSheet(); renderEvents();
+  society = Society.create(newSeed()); syncClock(); events = ['Welcome to Willowbrook!']; lastEventSeq = society.s.seq.ev; seenEdition = 0;
+  for (const r of residents) { placeAt(r, r.home[0], r.home[1]); r.yaw = r.faceYaw = 0; r.dest = [...r.home]; r.state = 'Starting the day'; r.decSeq = -1; }
+  for (const w of workers) { w.g.visible = false; w.job = null; w.state = 'off'; }
+  closeSheet(); closePanels(); syncPlots(true); renderEvents();
 }
 function renderEvents() {
   $('events').replaceChildren(...events.slice(0, 8).map(t => { const d = document.createElement('div'); d.textContent = t; return d; }));
   $('tickerText').textContent = events[0] || '';
 }
-let tickerTimer = 0;
-function flashTicker() { if (!started || $('feed').classList.contains('open')) return; const t = $('ticker'); t.classList.add('show'); clearTimeout(tickerTimer); tickerTimer = setTimeout(() => t.classList.remove('show'), 5000); }
-function log(s) { events.unshift('Day ' + day + ': ' + s); events = events.slice(0, 25); renderEvents(); flashTicker(); }
+let tickerTimer = 0, tickerAction = null;
+function flashTicker(text, action = null) { if (text) $('tickerText').textContent = text; tickerAction = action; if (!started || $('feed').classList.contains('open')) return; const t = $('ticker'); t.classList.add('show'); clearTimeout(tickerTimer); tickerTimer = setTimeout(() => t.classList.remove('show'), 5000); }
+function log(s, quiet = false) { events.unshift('Day ' + day + ': ' + s); events = events.slice(0, 25); renderEvents(); if (!quiet) flashTicker(); }
 
-function goal(r){let hour=minutes/60;let opts=hour<7||hour>=22?[r.home]:hour<17?[[...r.home],sites[4].slice(0,2),sites[6].slice(0,2),sites[7].slice(0,2)]:sites.map(s=>s.slice(0,2));if(r.hunger<30)opts=[sites[7].slice(0,2)];r.dest=opts[Math.floor(Math.random()*opts.length)].slice();r.dest[0]+=(Math.random()-.5)*2;r.dest[1]+=(Math.random()-.5)*2;r.state=hour<7||hour>=22?'Going home':r.hunger<30?'Getting food':hour<17?'Working or running errands':'Out exploring';r.next=minutes+20+Math.random()*85}
-const simNow = () => (day - 1) * 1440 + minutes; // absolute sim minutes (safe across midnight)
-const WORKPLACE = { Oliver: 4, Emma: 6, Mia: 7, Marcus: 8 };
-// Turn the destination chosen by goal() into a route: a building entrance (to go inside) or an activity spot.
-function planRoute(r) {
-  const si = siteIndexAt(r.dest[0], r.dest[1]), S = nav.sites[si], hour = minutes / 60, night = hour < 7 || hour >= 22;
+const simNow = () => society.s.abs; // absolute sim minutes (safe across midnight)
+const hash01 = (a, b) => { let h = (a * 2654435761 ^ b * 40503) >>> 0; h = Math.imul(h ^ h >>> 15, 2246822507) >>> 0; return (h >>> 8) / 16777216; };
+
+/* ---------- plots: the 3D town follows the simulation's buildings and projects ---------- */
+const plotOfSite = si => Object.values(society.s.plots).find(p => p.site === si);
+function siteState(si) {
+  const plot = plotOfSite(si); if (!plot) return { enterable: nav.sites[si]?.inside, original: true };
+  const v = society.plotVisual(plot.id), biz = plot.business && society.s.businesses[plot.business], isHome = Object.values(society.s.people).some(p => p.home === plot.id);
+  const standing = v.mode === 'original' || v.mode === 'structure';
+  return { plot, v, enterable: standing && !plot.project && !(biz && biz.status === 'closed' && !isHome) && !(v.mode === 'original' && society.s.buildings[plot.building]?.land), original: v.mode === 'original' };
+}
+function syncPlots(force) {
+  for (const pid of Object.keys(world.PLOT_ANCHOR)) {
+    const plot = society.s.plots[pid], v = society.plotVisual(pid);
+    world.setPlotVisual(pid, v);
+    const A = world.PLOT_ANCHOR[pid], si = A.site, land = v.mode === 'original' && society.s.buildings[plot.building]?.land;
+    if (si >= 9) {
+      nav.setLot(si, land ? 'land' : 'built');
+      const built = !land && v.mode !== 'vacant' && !(v.mode === 'construction' && ['planning', 'permits', 'siteprep'].includes(v.phase)) && !(v.mode === 'demolition' && ['rubble', 'clearing', 'cleared'].includes(v.phase));
+      setDynamicFootprint(si, built ? [A.x - A.w / 2 - .25, A.z - A.d / 2 - .25, A.x + A.w / 2 + .25, A.z + A.d / 2 + .25] : null);
+    }
+  }
+  plotVer = society.s.visualVer;
+}
+let plotVer = -1, lastPlotSync = 0;
+
+/* ---------- following the simulation's decisions on the map ---------- */
+// The simulation decides what each resident does and why; the map turns that into a walk along the sidewalks.
+function spotsFor(si) {
+  const st = siteState(si);
+  if ([4, 6, 7].includes(si) && !st.original) return []; // the old patio and stands were part of the original building
+  return nav.sites[si].spots;
+}
+function followDecision(r, d) {
+  const plot = society.s.plots[d.plot]; if (!plot) return;
+  r.state = d.label; r.reason = d.reason;
+  const si = plot.site, st = siteState(si);
+  let enter = d.inside === true ? true : d.inside === 'any' ? hash01(r.id + 1, d.seq) < .55 : false;
+  if (d.kind === 'sleep') enter = true;
+  planRoute(r, si, { enter: enter && st.enterable, act: d.act, sleep: d.kind === 'sleep' });
+}
+function planRoute(r, si, want = {}) {
+  const S = nav.sites[si]; if (!S) return;
   releaseSpot(r);
-  let enter = night ? S.inside : r.state === 'Getting food' ? false : S.inside && Math.random() < (WORKPLACE[r.name] === si ? .75 : .3), spot = null;
-  if (!enter) { const free = S.spots.filter(p => p.owner < 0 && (!night || p.seat)); spot = free.length ? free[Math.floor(Math.random() * free.length)] : null; if (!spot && S.inside) enter = true; }
+  let enter = !!(want.enter && S.inside), spot = null;
+  if (!enter) {
+    const free = spotsFor(si).filter(p => p.owner < 0 && (!want.sleep || p.seat));
+    const pref = want.act ? free.filter(p => p.act === want.act || (want.act === 'sip' && p.seat) || (want.act === 'sketch' && p.act === 'sit')) : free;
+    const pool = pref.length ? pref : free;
+    spot = pool.length ? pool[Math.floor(hash01(r.id + 7, Math.floor(simNow())) * pool.length)] : null;
+  }
   if (r.inside >= 0) {
     if (enter && r.inside === si) { r.site = si; r.enterAt = -1; r.path = []; r.pi = 0; const e = nav.node(S.E); r.dest = [e.x, e.z]; return; }
     const e = nav.node(nav.sites[r.inside].E); r.pos.set(e.x, e.y, e.z); r.prev.copy(r.pos); r.inside = -1; // step out of the door
@@ -371,6 +561,10 @@ function planRoute(r) {
   r.spot = spot; r.site = si; r.enterAt = enter ? si : -1;
   const target = spot ? spot.node : S.E, tn = nav.node(target);
   r.path = nav.path(r.pos, target); r.pi = 0; r.dest = [tn.x, tn.z];
+  if (!enter && !spot) { // nowhere to sit: wait nearby, a little off the path
+    for (let k = 0; k < 6; k++) { const a = hash01(r.id, k + Math.floor(simNow())) * Math.PI * 2, rr = .9 + k * .25, x = tn.x + Math.cos(a) * rr, z = tn.z + Math.sin(a) * rr;
+      if (!insideFootprint(x, z, .35) && !segmentBlocked(tn.x, tn.z, x, z) && Math.abs(x) < 31 && Math.abs(z) < 31) { r.path.push({ x, y: 0, z }); r.dest = [x, z]; r.faceYaw = a + Math.PI; break; } }
+  }
   if (!r.path.length) arrive(r);
 }
 function arrive(r) {
@@ -406,15 +600,67 @@ function greetings() { // passers-by stop briefly, face each other and say hi
     greetCooldown.set(k, T + 90); pauseTogether(a, b, 1.2, 'hi');
   }
 }
-function chat(a, b) { // the v0.1 social rule's effects, plus a visible pause when both are outdoors
-  a.friendships[b.name]=(a.friendships[b.name]||0)+1;b.friendships[a.name]=(b.friendships[a.name]||0)+1;let m=a.name+' chatted with '+b.name;a.memories.unshift(m);b.memories.unshift(m);a.memories=a.memories.slice(0,6);b.memories=b.memories.slice(0,6);log(m);a.social=Math.min(100,a.social+8);b.social=Math.min(100,b.social+8);
-  if (a.inside < 0 && b.inside < 0) pauseTogether(a, b, 6, 'talk');
+// Conversations happen in the simulation; when both people are outdoors near each other you see them talk.
+function showInteraction(it) {
+  const a = byPid(it.a), b = byPid(it.b);
+  if (a.inside >= 0 || b.inside >= 0 || a.pos.distanceTo(b.pos) > 6 || a.path.length - a.pi > 0 || b.path.length - b.pi > 0) return;
+  pauseTogether(a, b, it.kind === 'argument' ? 4 : 6, it.kind === 'argument' ? 'argue' : 'talk');
+  if (it.kind !== 'argument') log(a.name + ' chatted with ' + b.name, true);
 }
-function step(dt){let old=minutes;minutes+=dt;if(minutes>=1440){minutes-=1440;day++;log('A new day begins.');residents.forEach(r=>r.energy=Math.min(100,r.energy+30))}for(const r of residents){r.prev.copy(r.pos);if(minutes>=r.next||minutes<old){goal(r);planRoute(r)}let len=moveResident(r,dt);r.hunger=Math.max(0,r.hunger-dt*.018);r.energy=Math.max(0,r.energy-dt*.012);if(r.state==='Getting food'&&len<1.5)r.hunger=Math.min(100,r.hunger+dt*.7)}greetings();if(Math.abs(minutes-lastSocial)>25){lastSocial=minutes;for(let i=0;i<residents.length;i++)for(let j=i+1;j<residents.length;j++){let a=residents[i],b=residents[j];if(a.pos.distanceTo(b.pos)<3&&Math.random()<.23)chat(a,b)}}}
+function chat(a, b) { society.interact(person(a), person(b), person(a).loc.plot || person(a).home, true); if (a.inside < 0 && b.inside < 0) pauseTogether(a, b, 6, 'talk'); log(a.name + ' chatted with ' + b.name); society.consumeInteractions(); }
 
+const QUIET_TYPES = /^(project\.phase|social\.date$|town\.|player\.|sandbox\.|person\.artSold|person\.rejected|community\.market)/;
+function feedEvents() {
+  if (society.s.seq.ev === lastEventSeq) return;
+  const fresh = society.s.events.filter(e => +e.id.slice(1) > lastEventSeq); lastEventSeq = society.s.seq.ev;
+  for (const e of fresh) if (e.imp >= 3 && !QUIET_TYPES.test(e.type)) log(e.text, e.imp < 4);
+  const ed = society.s.papers.at(-1);
+  if (ed && ed.no > seenEdition) { seenEdition = ed.no; if (ed.stories.length) flashTicker('The Willowbrook Times: ' + ed.stories[0].headline, () => openTown('times')); }
+}
+function step(dt) {
+  society.advance(dt); syncClock();
+  for (const r of residents) {
+    r.prev.copy(r.pos);
+    const d = person(r).decision;
+    if (d && d.seq !== r.decSeq && !r.hold) { r.decSeq = d.seq; followDecision(r, d); }
+    moveResident(r, dt);
+  }
+  greetings();
+  for (const it of society.consumeInteractions()) showInteraction(it);
+  if (society.s.visualVer !== plotVer || (simNow() - lastPlotSync > 10 && society.s.seq.prj && Object.values(society.s.projects).some(p => p.status === 'active'))) { syncPlots(); lastPlotSync = simNow(); }
+  stepWorkers(dt);
+  feedEvents();
+}
+/* ---------- crews come and go with the work ---------- */
+function stepWorkers(dt) {
+  const active = Object.values(society.s.projects).filter(p => p.status === 'active' && p.crew && world.PLOT_ANCHOR[p.plot]);
+  const wanted = []; for (const p of active) { const spots = world.crewSpots(p.plot); for (let k = 0; k < Math.min(2, spots.length); k++) wanted.push({ plot: p.plot, spot: spots[k] }); }
+  workers.forEach((w, i) => {
+    w.prev.copy(w.pos);
+    const job = wanted[i] || null, key = job ? job.plot + ':' + job.spot.join(',') : null;
+    if (key && w.job !== key) { // head to the site
+      const [ex, ez] = CREW_ENTRY[i % CREW_ENTRY.length];
+      if (w.state === 'off') { w.pos.set(ex, 0, ez); w.prev.copy(w.pos); w.g.position.copy(w.pos); w.lastX = ex; w.lastZ = ez; w.g.visible = true; }
+      const si = world.PLOT_ANCHOR[job.plot].site, e = nav.node(nav.sites[si].E);
+      w.path = [...nav.path(w.pos, nav.sites[si].E), { x: job.spot[0], y: 0, z: job.spot[1] }]; w.pi = 0; w.job = key; w.state = 'going'; w.faceTo = job.spot[2];
+    } else if (!key && w.state !== 'off' && w.state !== 'leaving') { // knock off: walk back out of town
+      const [ex, ez] = CREW_ENTRY[i % CREW_ENTRY.length], A = Object.values(world.PLOT_ANCHOR).find(a => Math.hypot(a.x - w.pos.x, a.z - w.pos.z) < 8), out = A ? nav.node(nav.sites[A.site].E) : w.pos;
+      w.path = [{ x: out.x, y: 0, z: out.z }, ...nav.path(out, nearestNode(ex, ez))]; w.pi = 0; w.job = null; w.state = 'leaving';
+    }
+    w.walking = false; let budget = dt * .55;
+    while (budget > 1e-6 && w.pi < w.path.length) { const p = w.path[w.pi], dx = p.x - w.pos.x, dz = p.z - w.pos.z, d = Math.hypot(dx, dz); if (d > 1e-4) w.faceYaw = Math.atan2(dx, dz); if (d <= budget) { w.pos.set(p.x, 0, p.z); budget -= d; w.pi++; } else { const k = budget / d; w.pos.x += dx * k; w.pos.z += dz * k; budget = 0; } w.walking = true; }
+    if (w.pi >= w.path.length) { if (w.state === 'going') { w.state = 'working'; w.faceYaw = w.faceTo; } else if (w.state === 'leaving') { w.state = 'off'; w.g.visible = false; } }
+  });
+}
+const nearestNode = (x, z) => { let best = 0, bd = Infinity; nav.nodes.forEach((n, i) => { const d = Math.hypot(n.x - x, n.z - z); if (d < bd) { bd = d; best = i; } }); return best; };
+
+function savePayload() {
+  return { version: GAME_VERSION, saveFormat: SAVE_FORMAT, savedAt: Date.now(), minutes, day, events, seenEdition,
+    residents: residents.map(r => ({ name: r.name, x: r.pos.x, z: r.pos.z, y: r.pos.y, inside: r.inside, site: r.site, energy: r.energy, social: r.social, hunger: r.hunger, friendships: r.friendships, memories: r.memories.slice(0, 6) })),
+    society: society.toJSON() };
+}
 function save(quiet = false) {
-  const payload = { version: GAME_VERSION, saveFormat: 2, savedAt: Date.now(), minutes, day, events, residents: residents.map(r => ({ name: r.name, x: r.pos.x, z: r.pos.z, y: r.pos.y, inside: r.inside, energy: r.energy, social: r.social, hunger: r.hunger, friendships: r.friendships, memories: r.memories })) };
-  const json = JSON.stringify(payload);
+  const json = JSON.stringify(savePayload());
   try {
     const prev = localStorage.getItem(SAVE_KEY); if (prev) localStorage.setItem(SAVE_BACKUP_KEY, prev); // one-slot backup
     localStorage.setItem(SAVE_KEY, json);
@@ -453,12 +699,13 @@ function usableRect(includeSheet) {
     if (c.height && c.top > H * .3) bottom = Math.min(bottom, c.top + 40); else if (c.width && c.left > W * .3) right = c.left;
     return { left: left + pad, right: right - pad, top: s.top + pad, bottom: bottom - pad };
   }
-  const sheetOpen = includeSheet && document.body.classList.contains('sheet-open');
+  const panel = document.body.classList.contains('panel-open') ? document.querySelector('.panel.open') : null;
+  const sheetOpen = includeSheet && (document.body.classList.contains('sheet-open') || !!panel);
   if (W > H * 1.1 && !sheetOpen) { // landscape: HUD sits in the corners, the town's diamond can use the full height
     return { left: s.left + pad, right: W - s.right - pad, top: s.top + pad + 6, bottom: H - s.bottom - pad };
   }
   const lows = [];
-  if (sheetOpen) lows.push($('sheet'));
+  if (sheetOpen) lows.push(panel || $('sheet'));
   else lows.push($('dock'));
   for (const el of lows) { const r = el.getBoundingClientRect(); if (r.height && r.top > H * .35) bottom = Math.min(bottom, r.top); }
   return { left: s.left + pad, right: W - s.right - pad, top: top + pad, bottom: bottom - pad };
@@ -602,17 +849,40 @@ function pick(x, y) {
     let best = 44;
     for (const c of outdoors) { _p.set(c.g.position.x, 1.2, c.g.position.z).project(camera); if (_p.z > 1) continue; const d = Math.hypot((_p.x + 1) / 2 * innerWidth - x, (1 - _p.y) / 2 * innerHeight - y); if (d < best) { best = d; r = c; } }
   }
-  if (r) openSheet(r);
+  if (r) { openSheet(r); return; }
+  const pid = pickPlot(x, y); if (pid) openPlace(pid, false);
 }
 
 /* ================= Resident bottom sheet ================= */
 const sheet = $('sheet');
+const el = (tag, props = {}, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(props)) { if (k === 'class') e.className = v; else if (k === 'text') e.textContent = v; else if (k.startsWith('data-')) e.setAttribute(k, v); else e[k] = v; } for (const c of kids) if (c != null) e.append(c); return e; };
+const personLink = (id, label) => society.s.people[id] ? el('button', { class: 'link', 'data-person': id, text: label ?? society.s.people[id].name }) : document.createTextNode(label ?? society.nameOf(id));
+const plotLink = (pid, label) => society.s.plots[pid] ? el('button', { class: 'link', 'data-plot': pid, text: label ?? society.plotName(pid) }) : document.createTextNode(label ?? pid);
+// Turn plain event text into text with tappable resident and place names.
+function linkify(text, who = [], plot = null) {
+  const frag = document.createDocumentFragment(), names = [];
+  for (const id of who) if (society.s.people[id]) names.push([society.s.people[id].name, () => personLink(id)]);
+  if (plot && society.s.plots[plot]) { const pl = society.s.plots[plot]; names.push([pl.address, () => plotLink(plot, pl.address)]); const nm = society.plotName(plot); if (nm !== pl.address) names.push([nm, () => plotLink(plot, nm)]); }
+  let rest = text;
+  while (rest) {
+    let best = null; for (const [n, mk] of names) { const i = rest.indexOf(n); if (i >= 0 && (!best || i < best.i)) best = { i, n, mk }; }
+    if (!best) { frag.append(rest); break; }
+    frag.append(rest.slice(0, best.i), best.mk()); rest = rest.slice(best.i + best.n.length);
+  }
+  return frag;
+}
+document.addEventListener('click', e => { // tappable names everywhere
+  const b = e.target.closest('[data-person],[data-plot]'); if (!b || b.closest('select')) return;
+  if (b.dataset.person) { closePanels(); openSheet(byPid(b.dataset.person)); if (!follow) focusOn(byPid(b.dataset.person)); }
+  else if (b.dataset.plot) openPlace(b.dataset.plot, true);
+});
 function syncFollowBtn() { const b = $('sFollow'); b.textContent = follow ? 'Following' : 'Follow'; b.setAttribute('aria-pressed', String(follow)); }
 function openSheet(r) {
+  closePanels();
   if (selected !== r && follow) follow = false;
   selected = r; syncFollowBtn();
   $('sSwatch').style.background = '#' + r.color.toString(16).padStart(6, '0');
-  $('sName').textContent = r.name; $('sJob').textContent = r.job;
+  $('sName').textContent = r.name;
   sheet.classList.remove('expanded');
   document.body.classList.add('sheet-open'); sheet.setAttribute('aria-hidden', 'false');
   updateSheet(true);
@@ -622,43 +892,63 @@ function closeSheet() {
   document.body.classList.remove('sheet-open'); sheet.classList.remove('expanded'); sheet.setAttribute('aria-hidden', 'true');
 }
 function setBar(id, v) { const pct = Math.round(v); $(id + 'V').textContent = pct + '%'; const b = $(id + 'B'); b.firstElementChild.style.width = pct + '%'; b.classList.toggle('low', pct < 30); }
-let lastSheetKey = '';
+let lastSheetKey = '', sheetTab = 'life';
+const SRC_LABEL = s => s === 'self' ? 'was there' : s === 'witnessed' ? 'saw it' : s.startsWith('told by') ? s : s === 'read in the Times' ? 'read it in the Times' : s;
 function updateSheet(force) {
   const r = selected; if (!r) return;
+  const p = person(r), d = p.decision;
+  $('sJob').textContent = p.occupation + ' · ' + money(society.cash(p.id));
   $('sActivity').innerHTML = ''; const lbl = document.createElement('span'); lbl.textContent = 'Now: '; $('sActivity').append(lbl, activityText(r));
-  $('sGoal').innerHTML = ''; const gl = document.createElement('span'); gl.textContent = 'Goal: '; $('sGoal').append(gl, r.state + (r.site >= 0 ? ' → ' + sites[r.site][2] : ''));
+  $('sWhy').textContent = d ? 'Why: ' + d.reason : '';
+  const A = AMBITIONS[p.ambition.key], done = p.ambition.done.length;
+  $('sGoal').innerHTML = ''; const gl = document.createElement('span'); gl.textContent = 'Goal: '; $('sGoal').append(gl, A.label + ' · ' + done + '/' + A.milestones.length);
   const mood = moodOf(r); $('sMood').textContent = mood.emoji + ' ' + mood.label; $('sMood').dataset.mood = mood.key;
   setBar('sEnergy', r.energy); setBar('sHunger', r.hunger); setBar('sSocial', r.social);
   const important = importantMemories(r);
-  $('sMemory').textContent = '💭 ' + (important[0]?.text || 'A fresh start');
-  const key = r.id + '|' + r.memories.join('|') + '|' + JSON.stringify(r.friendships);
-  if (force || key !== lastSheetKey) {
-    lastSheetKey = key;
-    const li = t => { const e = document.createElement('li'); e.textContent = t; return e; };
-    $('sMemList').replaceChildren(...(important.length ? important : [{ text: 'A fresh start' }]).map(m => { const e = li(m.text); if (m.star) e.className = 'star'; return e; }));
-    const fr = Object.entries(r.friendships).sort((a, b) => b[1] - a[1]).slice(0, 5);
-    $('sFriendList').replaceChildren(...(fr.length ? fr.map(([n, c]) => n + ' — ' + c + (c === 1 ? ' chat' : ' chats')) : ['No friends yet']).map(li));
-  }
+  $('sMemory').textContent = '💭 ' + (important[0]?.text || (p.worries[0] ? 'Worried: ' + p.worries[0].toLowerCase() : 'A fresh start'));
+  const key = r.id + '|' + sheetTab + '|' + p.memories.length + '|' + (p.memories[0]?.id) + '|' + p.timeline.length + '|' + Math.round(society.cash(p.id) / 10) + '|' + JSON.stringify(r.friendships) + '|' + p.worries.join();
+  if (force || key !== lastSheetKey) { lastSheetKey = key; renderJournal(r, important); }
 }
-const ACT_TEXT = { sit: 'Relaxing on a bench', sitTalk: 'Relaxing on a bench', garden: 'Tending the garden', work: 'Fixing things up', browse: 'Browsing the flowers', sketch: 'Sketching the town', watch: 'Taking in the view' };
+function renderJournal(r, important) {
+  const p = person(r), j = society.journal(p.id);
+  const li = (...k) => el('li', {}, ...k);
+  $('sMemList').replaceChildren(...(important.length ? important : [{ text: 'A fresh start', mem: null }]).map(m => { const e = li(m.mem ? linkify(m.text, m.mem.who, m.mem.plot) : m.text); if (m.mem) e.append(el('br'), el('small', { text: `Day ${m.mem.day} · ${SRC_LABEL(m.mem.src)}${m.mem.conf < .95 ? ' · ' + Math.round(m.mem.conf * 100) + '% sure' : ''}` })); if (m.star) e.className = 'star'; return e; }));
+  const rels = j.relationships.slice(0, 8);
+  $('sFriendList').replaceChildren(...(rels.length ? rels.map(x => li(personLink(x.id), ' — ' + x.status, el('br'), el('small', { text: `friendship ${x.friendship} · trust ${x.trust}${x.affection > 10 ? ' · affection ' + x.affection : ''}${x.rivalry > 10 ? ' · rivalry ' + x.rivalry : ''} · ${r.friendships[x.name] || 0} chats` }))) : [li('No friends yet')]));
+  const life = $('sLife'); life.replaceChildren(
+    el('p', { style: 'margin:4px 0 8px', text: j.bio }),
+    el('dl', { class: 'kv' },
+      el('dt', { text: 'Age' }), el('dd', { text: j.age + ' · ' + j.personality.join(', ') }),
+      el('dt', { text: 'Work' }), el('dd', { text: j.job ? `${j.job.role} · ${j.job.where} (since day ${j.job.since})` : 'Looking for work' }),
+      el('dt', { text: 'Money' }), el('dd', { text: money(j.cash) + (j.debt ? ' · owes ' + money(j.debt) : '') }),
+      el('dt', { text: 'Home' }), el('dd', {}, plotLink(p.home, j.homeName)),
+      el('dt', { text: 'Owns' }), el('dd', {}, ...(j.owns.length ? j.owns.flatMap((o, i) => [i ? ', ' : '', plotLink(o.id, o.name)]) : ['—'])),
+      el('dt', { text: 'Partner' }), el('dd', {}, j.partner ? personLink(p.partner) : '—'),
+      el('dt', { text: 'Mood' }), el('dd', { text: `happiness ${j.happiness} · stress ${j.stress}` })),
+    el('h4', { text: 'Ambition' }), el('div', { text: j.ambition.label }), el('div', { class: 'prog' }, el('i', { style: `width:${j.ambition.progress}%` })),
+    el('ul', { class: 'list' }, ...j.ambition.milestones.map(m => li((m.done ? '✓ ' : '○ ') + m.label))),
+    el('h4', { text: 'Worries' }), el('div', { text: j.worries.length ? j.worries.join(' · ') : 'Nothing much' }));
+  const story = $('sStory'); story.replaceChildren(
+    el('h4', { text: 'Milestones & life events' }), el('ul', { class: 'list' }, ...(j.timeline.length ? j.timeline.slice(0, 30).map(t => { const ev = society.s.events.find(e => e.id === t.ev); return li(el('small', { text: 'Day ' + t.day + ' · ' }), ev ? linkify(t.text, ev.who, ev.plot) : t.text); }) : [li('The story is just beginning.')])),
+    el('h4', { text: 'Career' }), el('ul', { class: 'list' }, ...j.career.map(c => li(el('small', { text: 'Day ' + c.day + ' · ' }), c.text))));
+  for (const b of $('sTabs').children) b.setAttribute('aria-selected', String(b.dataset.tab === sheetTab));
+  for (const s of $('sMore').querySelectorAll('.sec')) s.hidden = s.dataset.sec !== sheetTab;
+}
+$('sTabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; sheetTab = b.dataset.tab; sheet.classList.add('expanded'); updateSheet(true); });
+const ACT_TEXT = { sit: 'Relaxing on a bench', sitTalk: 'Relaxing on a bench', garden: 'Tending the garden', work: 'Fixing things up', browse: 'Browsing', sketch: 'Painting', watch: 'Taking in the view' };
 function activityText(r) {
-  const at = i => sites[i][2], hour = minutes / 60;
-  if (r.inside >= 0) return r.inside === r.homeSite && (hour < 7 || hour >= 22) ? 'Asleep at home' : 'Inside ' + at(r.inside);
-  if (r.talkUntil > simNow() && r.talkWith) return (r.talkKind === 'hi' ? 'Saying hi to ' : 'Chatting with ') + r.talkWith.name;
-  if (r.path.length) return 'Walking to ' + at(r.site);
-  if (r.atSpot) {
-    const p = r.pose; let t = ACT_TEXT[p];
-    if (p === 'sip') t = r.site === 4 ? 'Enjoying a pastry' : 'Sipping coffee';
-    if (p === 'read') t = r.name === 'Sarah' ? 'Taking notes for a story' : 'Reading the notices';
-    if (p === 'watch') t = r.site === 5 ? 'Watching the fountain' : 'Admiring the statue';
-    return (t || 'Hanging out') + ' · ' + at(r.site);
-  }
+  const at = i => SITE_NAME(i), d = person(r).decision;
+  if (r.inside >= 0) return d?.kind === 'sleep' ? (r.inside === r.homeSite || society.s.plots[person(r).home]?.site === r.inside ? 'Asleep at home' : 'Resting') : (d && d.plot && society.s.plots[d.plot].site === r.inside ? d.label : 'Inside ' + at(r.inside));
+  if (r.talkUntil > simNow() && r.talkWith) return (r.talkKind === 'hi' ? 'Saying hi to ' : r.talkKind === 'argue' ? 'Arguing with ' : 'Chatting with ') + r.talkWith.name;
+  if (r.path.length - r.pi > 0) return 'Walking to ' + at(r.site) + (d ? ' · ' + d.label[0].toLowerCase() + d.label.slice(1) : '');
+  if (d) return d.label;
+  if (r.atSpot) return (ACT_TEXT[r.pose] || 'Hanging out') + ' · ' + at(r.site);
   return r.site >= 0 ? 'Hanging around ' + at(r.site) : r.state;
 }
-function importantMemories(r) { // memories involving their closest friends first
-  const best = Object.entries(r.friendships).sort((a, b) => b[1] - a[1]).filter(([, c]) => c >= 2).slice(0, 2).map(([n]) => n);
-  const tagged = r.memories.map((text, i) => ({ text, i, star: best.some(n => text.includes(n)) }));
-  return tagged.sort((a, b) => (b.star - a.star) || (a.i - b.i)).slice(0, 4);
+function importantMemories(r) { // significant memories first, then those involving their closest friends
+  const p = person(r), best = Object.entries(p.rel).filter(([, x]) => x.f >= .34).map(([id]) => id);
+  return p.memories.map((m, i) => ({ text: m.text, mem: m, i, star: m.who.some(w => best.includes(w)) && m.sig >= .3, score: m.sig * 2 + (m.who.some(w => best.includes(w)) ? .3 : 0) - i * .01 }))
+    .sort((a, b) => b.score - a.score).slice(0, 8);
 }
 function focusOn(r) { want.target.set(r.g.position.x, 0, r.g.position.z); want.dist = Math.min(want.dist, Math.max(home.dist * .7, 22)); atHome = false; }
 function nextResident() { const r = residents[selected ? (selected.id + 1) % residents.length : 0]; openSheet(r); if (!follow) focusOn(r); }
@@ -666,18 +956,204 @@ $('sFollow').onclick = () => { if (!selected) return; follow = !follow; syncFoll
 $('sNext').onclick = nextResident;
 $('sClose').onclick = closeSheet;
 // Drag the sheet: up to expand, down to collapse/close; tap the handle to toggle.
-(() => {
+function dragSheet(panel, handles, onClose) {
   let y0 = null, dy = 0, id = null;
-  const down = e => { if (e.target.closest('button') && e.target.id !== 'grab') return; y0 = e.clientY; dy = 0; id = e.pointerId; try { e.currentTarget.setPointerCapture(id); } catch {} sheet.classList.add('dragging'); };
-  const move = e => { if (y0 === null || e.pointerId !== id) return; dy = e.clientY - y0; if (dy > 0) sheet.style.transform = `translateY(${dy}px)`; };
+  const down = e => { if (e.target.closest('button') && !e.target.classList.contains('grab') && e.target.id !== 'grab') return; y0 = e.clientY; dy = 0; id = e.pointerId; try { e.currentTarget.setPointerCapture(id); } catch {} panel.classList.add('dragging'); };
+  const move = e => { if (y0 === null || e.pointerId !== id) return; dy = e.clientY - y0; if (dy > 0) panel.style.transform = `translateY(${dy}px)`; };
   const up = e => {
-    if (y0 === null || e.pointerId !== id) return; y0 = null; sheet.classList.remove('dragging'); sheet.style.transform = '';
-    if (dy > 70) { if (sheet.classList.contains('expanded')) sheet.classList.remove('expanded'); else closeSheet(); }
-    else if (dy < -30) sheet.classList.add('expanded');
-    else if (Math.abs(dy) < 6 && e.currentTarget.id === 'grab') sheet.classList.toggle('expanded');
+    if (y0 === null || e.pointerId !== id) return; y0 = null; panel.classList.remove('dragging'); panel.style.transform = '';
+    if (dy > 70) { if (panel.classList.contains('expanded')) panel.classList.remove('expanded'); else onClose(); }
+    else if (dy < -30) panel.classList.add('expanded');
+    else if (Math.abs(dy) < 6 && (e.currentTarget.id === 'grab' || e.currentTarget.classList.contains('grab'))) panel.classList.toggle('expanded');
   };
-  for (const el of [$('grab'), $('sheetHead')]) { el.addEventListener('pointerdown', down); el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up); }
-})();
+  for (const h of handles) { h.addEventListener('pointerdown', down); h.addEventListener('pointermove', move); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up); }
+}
+dragSheet(sheet, [$('grab'), $('sheetHead')], closeSheet);
+
+/* ================= Town panel: overview dashboard, The Willowbrook Times, places, play modes ================= */
+let townTab = 'overview', paperIndex = -1, townOpen = false;
+function closePanels() {
+  for (const id of ['town', 'place']) { $(id).classList.remove('open', 'expanded'); $(id).setAttribute('aria-hidden', 'true'); }
+  townOpen = false; selectedPlot = null; document.body.classList.remove('panel-open'); $('plotChip').style.display = 'none';
+}
+function openTown(tab) {
+  closeSheet(); closePanels(); if (tab) townTab = tab; if (townTab === 'times') paperIndex = -1;
+  townOpen = true; $('town').classList.add('open'); $('town').setAttribute('aria-hidden', 'false'); document.body.classList.add('panel-open');
+  renderTown(true);
+}
+$('townBtn').onclick = () => townOpen ? closePanels() : openTown();
+$('townClose').onclick = closePanels;
+$('townTabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; townTab = b.dataset.tab; if (townTab === 'times') paperIndex = -1; renderTown(true); });
+dragSheet($('town'), [$('townGrab')], closePanels);
+let lastTownKey = '';
+function renderTown(force) {
+  if (!townOpen) return;
+  const key = townTab + '|' + society.s.seq.ev + '|' + paperIndex + '|' + society.s.town.mode + '|' + society.s.town.influence.points + '|' + (townTab === 'places' ? Math.floor(simNow() / 30) : '');
+  if (!force && key === lastTownKey) return; lastTownKey = key;
+  for (const b of $('townTabs').children) b.setAttribute('aria-selected', String(b.dataset.tab === townTab));
+  const D = society.dashboard();
+  $('townSub').textContent = `Day ${D.day} · ${WEEKDAYS[weekday(D.day)]} · ${D.population} residents`;
+  const body = $('townBody'), keepScroll = !force ? body.scrollTop : 0;
+  body.replaceChildren(...(townTab === 'overview' ? overview(D) : townTab === 'times' ? timesView() : townTab === 'places' ? placesView() : playView()));
+  body.scrollTop = keepScroll;
+}
+function spark(values, color = '#f2c46d', zero = false) {
+  const w = 160, h = 46, svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('viewBox', `0 0 ${w} ${h}`); svg.setAttribute('class', 'spark'); svg.setAttribute('preserveAspectRatio', 'none');
+  if (values.length < 2) return svg;
+  const lo = zero ? Math.min(0, ...values) : Math.min(...values), hi = Math.max(...values, lo + 1), X = i => i / (values.length - 1) * w, Y = v => h - 3 - (v - lo) / (hi - lo) * (h - 6);
+  const path = document.createElementNS(svg.namespaceURI, 'path'); path.setAttribute('d', values.map((v, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1)).join(' ')); path.setAttribute('fill', 'none'); path.setAttribute('stroke', color); path.setAttribute('stroke-width', '2'); path.setAttribute('vector-effect', 'non-scaling-stroke');
+  svg.append(path); return svg;
+}
+function overview(D) {
+  const tile = (v, label) => el('div', { class: 'tile' }, el('b', { text: String(v) }), el('small', { text: label }));
+  const H = D.history, last = H.at(-1);
+  const out = [el('div', { class: 'tiles' },
+    tile(D.population, 'Population'), tile(D.employed, 'Employed'), tile(D.unemployed, 'Looking for work'),
+    tile(D.businesses, 'Businesses open'), tile(D.struggling, 'Struggling'), tile(D.vacant, 'Vacant'),
+    tile(D.forSale, 'For sale'), tile(D.projects, 'Construction'), tile(D.approval + '%', 'Mayor approval'),
+    tile(money(D.treasury), 'Town treasury'), tile(last ? money(last.revenue) : '—', 'Sales yesterday'), tile(last ? money(last.construction) : '—', 'Building spend'))];
+  if (H.length >= 2) out.push(el('h4', { text: 'Last ' + H.length + ' days' }), el('div', { class: 'charts' },
+    el('div', { class: 'chart' }, el('small', { text: 'Daily sales' }), spark(H.map(h => h.revenue))),
+    el('div', { class: 'chart' }, el('small', { text: 'Mayor approval' }), spark(H.map(h => h.approval), '#9fd38a')),
+    el('div', { class: 'chart' }, el('small', { text: 'Residents working' }), spark(H.map(h => h.employed), '#77d3ef', true)),
+    el('div', { class: 'chart' }, el('small', { text: 'Average happiness' }), spark(H.map(h => h.happiness), '#ffb3c8'))));
+  out.push(el('h4', { text: 'Recent events' }), el('ul', { class: 'list' }, ...(D.recent.length ? D.recent.map(e => el('li', {}, el('small', { text: 'Day ' + e.day + ' · ' }), linkify(e.text, e.who, e.plot))) : [el('li', { text: 'A quiet start in Willowbrook.' })])));
+  return out;
+}
+function timesView() {
+  const papers = society.s.papers; if (!papers.length) return [el('p', { text: 'The first edition of The Willowbrook Times comes out at 6:00 tomorrow morning.' })];
+  if (paperIndex < 0 || paperIndex >= papers.length) paperIndex = papers.length - 1;
+  const ed = papers[paperIndex], editor = ed.editor ? society.s.people[ed.editor].name : null;
+  const paper = el('div', { class: 'paper', id: 'paperEdition' }, el('div', { class: 'mast' }, el('b', { text: 'The Willowbrook Times' }), el('small', { text: `No. ${ed.no} · ${WEEKDAYS[weekday(ed.day + 1)]}, day ${ed.day + 1}${editor ? ' · edited by ' + editor : ''}` })));
+  if (!ed.stories.length) paper.append(el('h3', { class: 'lead', text: 'A Quiet Day in Willowbrook' }), el('p', { text: 'Nothing of note happened yesterday. Residents went about their routines.' }));
+  ed.stories.forEach((st, i) => paper.append(el('h3', { class: i ? '' : 'lead', text: st.headline }), el('p', {}, linkify(st.body, st.who, st.plot))));
+  if (ed.facts.length) paper.append(el('div', { class: 'facts' }, ...ed.facts.map(f => el('div', { text: f }))));
+  const prev = el('button', { text: '‹ Earlier', disabled: paperIndex <= 0, onclick: () => { paperIndex--; renderTown(true); } });
+  const next = el('button', { text: 'Later ›', disabled: paperIndex >= papers.length - 1, onclick: () => { paperIndex++; renderTown(true); } });
+  return [paper, el('div', { class: 'pnav' }, prev, el('span', { text: `Edition ${paperIndex + 1} of ${papers.length} in the archive` }), next)];
+}
+function statusChip(pl) {
+  const pr = pl.project && society.s.projects[pl.project], b = pl.business && society.s.businesses[pl.business];
+  if (pr) return el('span', { class: 'chip ' + (pr.status === 'paused-funds' ? 'bad' : 'info'), text: pr.status === 'paused-funds' ? 'Work paused' : pr.type === 'demolition' ? 'Demolition' : pr.type === 'renovation' ? 'Renovating' : 'Construction' });
+  if (pl.forSale) return el('span', { class: 'chip warn', text: 'For sale' });
+  if (b) return el('span', { class: 'chip ' + ({ healthy: 'good', growing: 'good', struggling: 'warn', 'in-debt': 'bad', closed: 'bad' }[b.status] || ''), text: { healthy: 'Healthy', growing: 'Growing', struggling: 'Struggling', 'in-debt': 'In debt', closed: 'Closed' }[b.status] || b.status });
+  if (pl.zoning.includes('park')) return el('span', { class: 'chip good', text: 'Public' });
+  return el('span', { class: 'chip', text: pl.building && society.s.buildings[pl.building]?.status === 'standing' ? 'Occupied' : 'Vacant' });
+}
+function placesView() {
+  return [el('ul', { class: 'list' }, ...Object.values(society.s.plots).map(pl => el('li', { class: 'place', 'data-plot': pl.id, tabIndex: 0 }, el('span', {}, el('b', { text: society.plotName(pl.id) }), el('br'), el('small', { text: `${pl.id} · ${pl.address} · ${society.nameOf(pl.owner)}` })), statusChip(pl))))];
+}
+const MODE_INFO = { observer: ['Observer', 'Watch only'], influence: ['Influence', 'Nudge, with limits'], sandbox: ['Sandbox', 'Change anything'] };
+function playView() {
+  const T = society.s.town, mode = T.mode, out = [];
+  out.push(el('div', { class: 'modes' }, ...Object.entries(MODE_INFO).map(([k, [t, sub]]) => el('button', { 'aria-pressed': String(mode === k), onclick: () => { society.setMode(k); toast(t + ' mode'); renderTown(true); } }, t, el('small', { text: sub })))));
+  out.push(el('p', { id: 'modeMsg', text: modeMsg }));
+  const ppl = () => el('select', {}, ...residents.map(r => el('option', { value: r.pid, text: r.name })));
+  const plots = filter => el('select', {}, ...Object.values(society.s.plots).filter(filter).map(p => el('option', { value: p.id, text: society.plotName(p.id) + ' (' + p.id + ')' })));
+  const row = (label, sub, controls, btn, fn) => { const b = el('button', { class: 'primary', text: btn }); b.onclick = () => fn(...controls.map(c => c.value)); return el('div', { class: 'act' }, el('label', {}, label, el('small', { text: sub })), ...controls, b); };
+  const done = res => { modeMsg = res.message; toast(res.ok ? '✓ ' + res.message : res.message); renderTown(true); if (res.ok) syncPlots(); };
+  if (mode === 'observer') out.push(el('p', { text: 'Willowbrook runs itself. Residents make their own choices, businesses rise and fall, and the Times reports what really happened. Switch to Influence to nudge residents (they may say no), or Sandbox to change the town directly.' }));
+  if (mode === 'influence') {
+    out.push(el('p', {}, el('b', { text: `Influence: ${T.influence.points} of 3 points` }), ' — one point returns each day. Residents decide for themselves and can refuse.'));
+    const forSale = p => !!p.forSale;
+    out.push(row('Encourage a goal', 'Motivates them to pursue their ambition for a few days', [ppl()], 'Encourage', p => done(society.influence('encourage', { person: p }))));
+    out.push(row('Introduce two residents', 'They’ll meet in the park within the hour', [ppl(), ppl()], 'Introduce', (a, b) => done(society.influence('introduce', { a, b }))));
+    out.push(row('Sponsor a festival', 'Paid by the town treasury ($300)', [], 'Sponsor', () => done(society.influence('sponsor-festival', {}))));
+    if (Object.values(society.s.plots).some(forSale)) out.push(row('Encourage an investment', 'Suggest a resident looks at a property for sale', [ppl(), plots(forSale)], 'Suggest', (p, plot) => done(society.influence('encourage-investment', { person: p, plot }))));
+    out.push(row('Support a proposal', 'Your voice counts at Town Hall’s next vote or permit', [plots(p => !p.zoning.includes('park'))], 'Support', plot => done(society.influence('support-proposal', { plot }))));
+    out.push(row('Help a job application', 'Their next applications go better', [ppl()], 'Help', p => done(society.influence('help-job', { person: p }))));
+  }
+  if (mode === 'sandbox') {
+    out.push(el('p', { text: 'Sandbox changes are applied immediately and recorded in the town’s history as sandbox actions. Money you add comes from a separate sandbox account.' }));
+    const dev = p => !p.zoning.includes('park') && !p.zoning.includes('civic') && p.zoning.includes('commercial');
+    const cats = () => el('select', {}, ...Object.entries(CATEGORIES).map(([k, c]) => el('option', { value: k, text: c.label })));
+    const owners = () => el('select', {}, el('option', { value: 'town', text: 'The town' }), ...residents.map(r => el('option', { value: r.pid, text: r.name })));
+    out.push(row('Build a business', 'Construct or convert a building on a plot', [plots(dev), cats(), owners()], 'Build', (plot, category, owner) => done(society.sandbox('build', { plot, category, owner }))));
+    out.push(row('Demolish', 'Knock down a shop or clear a lot', [plots(dev)], 'Demolish', plot => done(society.sandbox('demolish', { plot }))));
+    out.push(row('Change owner', '', [plots(p => !p.zoning.includes('park')), owners()], 'Set', (plot, owner) => done(society.sandbox('set-owner', { plot, owner }))));
+    out.push(row('Put up for sale', '', [plots(dev)], 'List', plot => done(society.sandbox('list', { plot }))));
+    const amt = el('select', {}, ...[500, 2000, -500].map(v => el('option', { value: v, text: (v > 0 ? 'Give ' : 'Take ') + money(Math.abs(v)) })));
+    out.push(row('Adjust money', 'Give or take cash from a resident', [ppl(), amt], 'Apply', (person, amount) => done(society.sandbox('money', { person, amount: +amount }))));
+    const bizSel = el('select', {}, ...Object.values(society.s.businesses).filter(b => society.isOperating(b)).map(b => el('option', { value: b.id, text: b.name })));
+    const mult = el('select', {}, ...[[.5, 'Half demand'], [1, 'Normal demand'], [1.5, '150% demand']].map(([v, t]) => el('option', { value: v, text: t })));
+    out.push(row('Business demand', 'Change how many customers a business gets', [bizSel, mult], 'Set', (biz, m) => done(society.sandbox('demand', { biz, mult: +m }))));
+    const evSel = el('select', {}, el('option', { value: 'festival', text: 'Festival' }), el('option', { value: 'market', text: 'Market' }));
+    out.push(row('Trigger an event', 'Starts within the hour in the park', [evSel], 'Start', ev => done(society.sandbox('trigger', { event: ev }))));
+  }
+  return out;
+}
+let modeMsg = '';
+
+/* ================= Property panel ================= */
+function openPlace(pid, focus) {
+  closeSheet(); closePanels();
+  selectedPlot = pid; $('place').classList.add('open'); $('place').setAttribute('aria-hidden', 'false'); document.body.classList.add('panel-open');
+  renderPlace(true);
+  if (focus) { const pl = society.s.plots[pid]; want.target.set(pl.x, 0, pl.z); want.dist = Math.min(want.dist, Math.max(LIMITS.distMin, 20)); atHome = false; }
+}
+$('pClose').onclick = closePanels;
+dragSheet($('place'), [$('placeGrab')], closePanels);
+let lastPlaceKey = '';
+function renderPlace(force) {
+  if (!selectedPlot) return;
+  const info = society.propertyInfo(selectedPlot); if (!info) return;
+  const key = selectedPlot + '|' + society.s.seq.ev + '|' + (info.project ? info.project.percent + info.project.status : '') + '|' + Math.floor(simNow() / 60);
+  if (!force && key === lastPlaceKey) return; lastPlaceKey = key;
+  $('pName').textContent = info.name; $('pSub').textContent = `${info.address} · plot ${info.id} · ${info.zoning.join(' / ')}`;
+  const b = info.business, pr = info.project, out = [];
+  const pl = society.s.plots[selectedPlot];
+  out.push(el('div', { style: 'margin:2px 0 8px' }, statusChip(pl), ' ', info.forSale ? el('span', { class: 'chip warn', text: 'Asking ' + money(info.forSale.price) }) : null));
+  out.push(el('dl', { class: 'kv' },
+    el('dt', { text: 'Owner' }), el('dd', {}, society.s.people[info.ownerId] ? personLink(info.ownerId) : info.owner),
+    el('dt', { text: 'Operator' }), el('dd', {}, b && society.isOperating(society.s.businesses[b.id]) ? el('span', {}, b.name + ' — ', society.s.people[b.ownerId] ? personLink(b.ownerId) : b.owner) : '—'),
+    el('dt', { text: 'Building' }), el('dd', { text: info.building ? `${info.building.name} (${info.building.kind}, ${info.building.status}${info.building.status === 'standing' ? ', condition ' + info.building.condition + '%' : ''})` : 'Empty lot' }),
+    el('dt', { text: 'Valuation' }), el('dd', { text: info.valuation ? money(info.valuation) + (info.purchasePrice && info.owners.length > 1 ? ' · bought for ' + money(info.purchasePrice) : '') : 'Public land' })));
+  if (pr) {
+    out.push(el('h4', { text: pr.type === 'demolition' ? 'Demolition' : pr.type === 'renovation' ? 'Renovation' : 'Construction' }),
+      el('div', {}, el('b', { text: pr.name }), ' — ', pr.phase, ` (stage ${Math.min(pr.phaseIndex + 1, pr.phases)} of ${pr.phases})`),
+      el('div', { class: 'prog', id: 'pProg' }, el('i', { style: `width:${pr.percent}%` })),
+      el('dl', { class: 'kv' }, el('dt', { text: 'Progress' }), el('dd', { text: pr.percent + '%' + (pr.status === 'active' ? ` · about ${pr.remainingDays} work days left` : '') }),
+        el('dt', { text: 'Owner' }), el('dd', { text: pr.owner }), el('dt', { text: 'Budget' }), el('dd', { text: `${money(pr.spent)} spent of ${money(pr.budget)}` }),
+        el('dt', { text: 'Status' }), el('dd', { text: pr.status === 'paused-funds' ? '⚠ ' + pr.blocker : pr.status === 'awaiting-opening' ? 'Ready — opens tomorrow morning' : pr.crew ? 'Crew on site' : 'Crew works 8:00–17:00, Mon–Sat' })));
+  }
+  if (b) {
+    const hist = b.hist.map(h => h.profit);
+    out.push(el('h4', { text: 'Business · ' + b.category }), el('dl', { class: 'kv' },
+      el('dt', { text: 'Last 7 days' }), el('dd', { text: `${b.customers7} customers · ${money(b.revenue7)} sales · ${money(b.profit7)} profit` }),
+      el('dt', { text: 'Cash' }), el('dd', { text: money(b.cash) + (b.debt ? ' · debt ' + money(b.debt) : '') }),
+      el('dt', { text: 'Reputation' }), el('dd', { text: b.reputation + '% · prices ' + b.price + '%' }),
+      el('dt', { text: 'Staff' }), el('dd', { text: b.employees.length ? b.employees.join(', ') : 'Owner only' + (b.hiring ? ' · hiring' : '') }),
+      el('dt', { text: 'Hours' }), el('dd', { text: b.hours + (b.closed ? ` · closed day ${b.closed}` : ` · open since day ${b.opened}`) })));
+    if (hist.length > 1) out.push(el('div', { class: 'chart' }, el('small', { text: 'Daily profit' }), spark(hist, '#f2c46d', true)));
+  }
+  // play-mode shortcuts for this property
+  const mode = society.s.town.mode, acts = [];
+  const act = (label, fn) => acts.push(el('button', { text: label, onclick: () => { const res = fn(); toast(res.ok ? '✓ ' + res.message : res.message); syncPlots(); renderPlace(true); } }));
+  if (mode === 'influence') { act('Support plans', () => society.influence('support-proposal', { plot: pl.id })); }
+  if (mode === 'sandbox' && pl.zoning.includes('commercial')) { act('Demolish', () => society.sandbox('demolish', { plot: pl.id })); if (!pl.forSale) act('List for sale', () => society.sandbox('list', { plot: pl.id })); }
+  if (acts.length) out.push(el('h4', { text: MODE_INFO[mode][0] + ' actions' }), el('div', { class: 'act' }, ...acts));
+  out.push(el('h4', { text: 'History' }), el('ul', { class: 'list' }, ...info.timeline.slice().reverse().slice(0, 40).map(t => { const ev = t.ev && society.s.events.find(e => e.id === t.ev); return el('li', {}, el('small', { text: 'Day ' + t.day + ' · ' }), ev ? linkify(t.text, ev.who, ev.plot) : t.text); })));
+  if (info.owners.length > 1) out.push(el('h4', { text: 'Owners' }), el('ul', { class: 'list' }, ...info.owners.map(o => el('li', {}, society.s.people[o.owner] ? personLink(o.owner) : o.name, el('small', { text: ` · from day ${o.from}${o.to ? ' to ' + o.to : ''}${o.price ? ' · ' + money(o.price) : ''}` })))));
+  const body = $('placeBody'), st = force ? 0 : body.scrollTop; body.replaceChildren(...out); body.scrollTop = st;
+}
+// Small floating progress chip above a selected property with work under way.
+function updatePlotChip() {
+  const chip = $('plotChip');
+  const pl = selectedPlot && society.s.plots[selectedPlot], pr = pl?.project && society.propertyInfo(selectedPlot).project;
+  if (!pr || !started) { chip.style.display = 'none'; return; }
+  _p.set(pl.x, 6.5, pl.z).project(camera); if (_p.z > 1) { chip.style.display = 'none'; return; }
+  chip.style.display = 'block'; chip.style.left = ((_p.x + 1) / 2 * innerWidth) + 'px'; chip.style.top = ((1 - _p.y) / 2 * innerHeight) + 'px';
+  const txt = (pr.status === 'paused-funds' ? '⚠ Paused · ' : '') + pr.phase + ' · ' + pr.percent + '%';
+  if (chip.dataset.t !== txt) { chip.dataset.t = txt; chip.replaceChildren(el('div', { text: txt }), el('div', { class: 'prog' }, el('i', { style: `width:${pr.percent}%` }))); }
+}
+const PLOT_RECT = { P001: [-25, -24, -15, -14], P002: [-12, -24, -2, -13], P003: [2, -24, 12, -14], P004: [15, -24, 27, -13.5], P005: [-30, -4, -15, 5], P006: [-11.5, -7, -2.5, 5], P007: [2.5, -4, 11.5, 5], P008: [16, -4, 30, 5], P009: [2.5, 15, 11.5, 29], P010: [-12, 13, -1.5, 26], P011: [15.5, 13, 31, 28.5], P012: [-30, 16, -15, 28.5] };
+function plotAt(x, z) { for (const [pid, [x0, z0, x1, z1]] of Object.entries(PLOT_RECT)) if (x >= x0 && x <= x1 && z >= z0 && z <= z1) return pid; return null; }
+function pickPlot(x, y) {
+  raycaster.setFromCamera(new THREE.Vector2(x / innerWidth * 2 - 1, -(y / innerHeight) * 2 + 1), camera);
+  const hits = raycaster.intersectObjects(scene.children.filter(o => o.isMesh || o.isGroup), true).filter(h => h.object.visible !== false && !h.object.name?.startsWith('lightPools') && !h.object.parent?.name?.startsWith('resident'));
+  const p = hits[0]?.point || groundAt(x, y); if (!p) return null;
+  return plotAt(p.x, p.z);
+}
 
 /* ================= HUD wiring ================= */
 let toastTimer = 0;
@@ -689,7 +1165,7 @@ $('resetCam').onclick = () => resetCamera();
 $('save').onclick = () => save();
 function setFeed(open) { $('feed').classList.toggle('open', open); $('feed').setAttribute('aria-hidden', String(!open)); $('clockPill').setAttribute('aria-expanded', String(open)); if (open) $('ticker').classList.remove('show'); }
 $('clockPill').onclick = () => setFeed(!$('feed').classList.contains('open'));
-$('ticker').onclick = () => setFeed(true);
+$('ticker').onclick = () => { if (tickerAction) { const a = tickerAction; tickerAction = null; $('ticker').classList.remove('show'); a(); } else setFeed(true); };
 canvas.addEventListener('pointerdown', () => setFeed(false));
 $('menu').onclick = () => openSettings();
 
@@ -709,7 +1185,7 @@ function refreshTitle() {
 }
 function showTitle() {
   if (sessionStarted && settings.autosave) save(true);
-  started = false; closeSheet(); setFeed(false); $('ticker').classList.remove('show');
+  started = false; closeSheet(); closePanels(); setFeed(false); $('ticker').classList.remove('show');
   document.body.classList.add('mode-title'); document.body.classList.remove('in-game');
   $('welcome').hidden = false; refreshTitle(); computeHome(); resetCamera();
   $(sessionStarted || readJSON(SAVE_KEY) ? 'btnContinue' : 'btnNew').focus({ preventScroll: true });
@@ -720,7 +1196,31 @@ function startGame() {
   computeHome(); resetCamera();
   if (settings.hints) { const h = $('hint'); h.classList.add('show'); clearTimeout(hintTimer); hintTimer = setTimeout(() => h.classList.remove('show'), 5000); }
 }
-$('btnContinue').onclick = () => { if (!$('btnContinue').disabled) startGame(); };
+$('btnContinue').onclick = () => { if ($('btnContinue').disabled) return; const away = !sessionStarted ? offlineCatchUp() : null; startGame(); if (away) showSummary(away); };
+// Optional, bounded offline progress: the town lives on (at normal speed) for up to three days while you're away.
+const OFFLINE_CAP = 3 * DAY;
+function offlineCatchUp() {
+  const s = readJSON(SAVE_KEY); if (!settings.offline || !s?.savedAt || s.offlineDone === s.savedAt) return null;
+  const mins = Math.min(OFFLINE_CAP, Math.floor((Date.now() - s.savedAt) / 1000)); // 1 real second = 1 game minute at 1×
+  if (mins < 30) return null;
+  const before = society.dashboard(), ev0 = society.s.seq.ev, t0 = performance.now();
+  for (let left = mins; left > 0; left -= 60) society.advance(Math.min(60, left)); // every hour processed exactly once
+  syncClock(); lastEventSeq = society.s.seq.ev;
+  for (const r of residents) { const d = person(r).decision, pl = d && society.s.plots[d.plot]; r.hold = false; r.decSeq = d?.seq ?? -1; if (pl) { const S = nav.sites[pl.site], e = nav.node(S.E); placeAt(r, e.x, e.z); if (d.inside === true && siteState(pl.site).enterable) r.inside = pl.site; r.site = pl.site; r.state = d.label; } }
+  syncPlots(true);
+  const happened = society.s.events.filter(e => +e.id.slice(1) > ev0 && e.imp >= 3 && !QUIET_TYPES.test(e.type));
+  try { const cur = readJSON(SAVE_KEY); if (cur) { cur.offlineDone = cur.savedAt; localStorage.setItem(SAVE_KEY, JSON.stringify(cur)); } } catch {}
+  save(true);
+  return { mins, before, after: society.dashboard(), happened, ms: performance.now() - t0 };
+}
+function showSummary(a) {
+  const h = Math.floor(a.mins / 60), d = Math.floor(h / 24);
+  $('sumText').textContent = `Willowbrook carried on for ${d ? d + ' day' + (d > 1 ? 's' : '') + ' and ' : ''}${h % 24} hour${h % 24 === 1 ? '' : 's'} while you were away. Treasury ${money(a.before.treasury)} → ${money(a.after.treasury)} · ${a.after.businesses} businesses open · approval ${a.after.approval}%.`;
+  const items = a.happened.sort((x, y) => y.imp - x.imp).slice(0, 10);
+  $('sumList').replaceChildren(...(items.length ? items.map(e => el('li', {}, el('small', { text: 'Day ' + e.day + ' · ' }), linkify(e.text, e.who, e.plot))) : [el('li', { text: 'Nothing big happened — just everyday life.' })]));
+  $('summary').hidden = false; $('sumOk').focus({ preventScroll: true }); paused = true;
+}
+$('sumOk').onclick = () => { $('summary').hidden = true; paused = false; };
 $('btnNew').onclick = () => {
   const hasSave = !!readJSON(SAVE_KEY);
   if ((hasSave || sessionStarted) && !confirm('Start a new Willowbrook? Your saved town will be replaced.')) return;
@@ -732,7 +1232,7 @@ $('btnSettings').onclick = () => openSettings();
 function openSettings() {
   settingsOpen = true;
   $('optQuality').value = settings.quality; $('qualityNote').textContent = settings.quality === 'auto' ? 'Auto adjusts to keep play smooth (now: ' + qLevel + ')' : 'Fixed quality';
-  $('optSens').value = settings.sensitivity; $('optShadows').checked = settings.shadows; $('optAutosave').checked = settings.autosave; $('optHints').checked = settings.hints;
+  $('optSens').value = settings.sensitivity; $('optShadows').checked = settings.shadows; $('optAutosave').checked = settings.autosave; $('optHints').checked = settings.hints; $('optOffline').checked = settings.offline;
   $('setDelete').disabled = !readJSON(SAVE_KEY);
   $('settings').hidden = false; $('setClose').focus({ preventScroll: true });
 }
@@ -744,6 +1244,26 @@ $('optShadows').onchange = e => { settings.shadows = e.target.checked; applyQual
 $('optQuality').onchange = e => { settings.quality = e.target.value; perf.playTime = 0; perf.frames = perf.time = 0; applyQuality(startQuality()); writeSettings(); };
 $('optAutosave').onchange = e => { settings.autosave = e.target.checked; writeSettings(); };
 $('optHints').onchange = e => { settings.hints = e.target.checked; writeSettings(); };
+$('optOffline').onchange = e => { settings.offline = e.target.checked; writeSettings(); };
+// Export / import: the whole town as a JSON file
+$('setExport').onclick = () => {
+  const json = sessionStarted ? JSON.stringify(savePayload()) : localStorage.getItem(SAVE_KEY);
+  if (!json) { toast('No town to export yet'); return; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' })); a.download = `willowbrook-day-${sessionStarted ? day : (JSON.parse(json).day ?? 1)}.json`;
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); toast('Save file exported');
+};
+$('setImport').onclick = () => $('importFile').click();
+$('importFile').onchange = async e => {
+  const f = e.target.files?.[0]; e.target.value = ''; if (!f) return;
+  try {
+    const obj = JSON.parse(await f.text());
+    if (!obj || typeof obj !== 'object' || !(Array.isArray(obj.residents) || obj.society)) throw new Error('not a Willowbrook save');
+    if (obj.society) Society.fromJSON(obj.society); // validate before replacing anything
+    if ((readJSON(SAVE_KEY) || sessionStarted) && !confirm('Replace your current town with the imported one?')) return;
+    const prev = localStorage.getItem(SAVE_KEY); if (prev) localStorage.setItem(SAVE_BACKUP_KEY, prev);
+    localStorage.setItem(SAVE_KEY, JSON.stringify(obj)); applySave(readSave()); sessionStarted = false; closeSettings(); showTitle(); toast('Town imported ✓');
+  } catch (err) { toast('That file isn’t a Willowbrook save'); console.warn(err); }
+};
 $('setSave').onclick = () => { save(); $('setDelete').disabled = false; };
 $('setTitleBtn').onclick = () => { closeSettings(); showTitle(); };
 $('setDelete').onclick = () => {
@@ -754,7 +1274,7 @@ $('setDelete').onclick = () => {
 
 document.addEventListener('keydown', e => {
   if (e.target.matches('input')) return;
-  if (e.key === 'Escape') { if (settingsOpen) closeSettings(); else if ($('feed').classList.contains('open')) setFeed(false); else if (selected) closeSheet(); }
+  if (e.key === 'Escape') { if (settingsOpen) closeSettings(); else if ($('feed').classList.contains('open')) setFeed(false); else if (selected) closeSheet(); else if (document.body.classList.contains('panel-open')) closePanels(); }
   else if ((e.key === 'r' || e.key === 'R') && started && !settingsOpen) resetCamera();
 });
 
@@ -785,11 +1305,21 @@ function updateResidents(dt, ts) {
     // speech & thought bubbles
     if (r.talkUntil > simNow() && r.talkWith) {
       if (r.talkKind === 'hi') r.bubble.show('hi');
+      else if (r.talkKind === 'argue') r.bubble.show(Math.floor(ts / 1.1) % 2 === (r.id < r.talkWith.id ? 0 : 1) ? 'argue' : 'talk');
       else { const mine = Math.floor(ts / 1.4) % 2 === (r.id < r.talkWith.id ? 0 : 1); if (mine) r.bubble.show((r.friendships[r.talkWith.name] || 0) >= 3 ? 'heart' : 'talk'); else r.bubble.hide(); }
     } else if (r.atSpot && ts > r.thoughtAt) {
       if (!r.bubble.visible) { const p = r.pose, mood = moodOf(r).key; const k = r.energy < 25 && seated(r) ? 'zzz' : p === 'sip' ? 'cup' : (p === 'garden' || p === 'browse') ? 'flower' : mood === 'cheerful' ? 'note' : null; if (k) r.bubble.show(k); r.thoughtAt = ts + 2.4; }
       else { r.bubble.hide(); r.thoughtAt = ts + 7 + (r.id * 2.3) % 6; }
     } else if (!r.atSpot) r.bubble.hide();
+  }
+  for (const w of workers) { // construction crew
+    if (!w.g.visible) continue;
+    w.g.position.lerpVectors(w.prev, w.pos, alpha);
+    const moved = Math.hypot(w.g.position.x - w.lastX, w.g.position.z - w.lastZ); w.lastX = w.g.position.x; w.lastZ = w.g.position.z;
+    w.phase += Math.min(moved * 14, .9); w.movingT = moved > 1e-4 ? .25 : (w.movingT || 0) - dt; w.walkingVis = w.movingT > 0;
+    w.yaw += angleTo(w.faceYaw, w.yaw) * (1 - Math.exp(-dt * 9)); w.g.rotation.y = w.yaw;
+    w.pose = w.state === 'working' ? (w.id % 2 ? 'work' : 'garden') : 'idle';
+    animateCharacter(w, dt, ts);
   }
 }
 
@@ -806,7 +1336,8 @@ function frame(t) {
   const c = 'Day ' + day + ' · ' + fmtTime(minutes); if (c !== lastClock) { $('clock').textContent = c; lastClock = c; }
   updateResidents(delta, t / 1000);
   ring.visible = !!selected && selected.inside < 0; if (selected) { ring.position.set(selected.g.position.x, selected.g.position.y + .17, selected.g.position.z); ring.material.opacity = .65 + Math.sin(t / 250) * .25; }
-  if (selected && (sheetTick += delta) > .4) { sheetTick = 0; updateSheet(false); }
+  if ((sheetTick += delta) > .4) { sheetTick = 0; if (selected) updateSheet(false); if (townOpen) renderTown(false); if (selectedPlot) renderPlace(false); }
+  updatePlotChip();
   if (started && settings.autosave && (autosaveTick += delta) > 120) { autosaveTick = 0; save(true); }
   renderer.render(scene, camera);
   lastRenderInfo.calls = renderer.info.render.calls; lastRenderInfo.triangles = renderer.info.render.triangles;
@@ -837,7 +1368,7 @@ requestAnimationFrame(frame);
 // Small read-only hook for automated tests and debugging.
 window.__tlw = {
   version: GAME_VERSION, cam, want, LIMITS, view,
-  get home() { return home; }, get state() { return { minutes, day, started, paused, speed, follow, selected: selected?.name ?? null, events: events.slice(), atHome }; },
+  get home() { return home; }, get state() { return { minutes, day, started, paused, speed, follow, selected: selected?.name ?? null, selectedPlot, townOpen, events: events.slice(), atHome, mode: society.s.town.mode }; },
   residents: () => residents.map(r => ({ name: r.name, x: r.pos.x, z: r.pos.z, energy: r.energy, hunger: r.hunger, social: r.social, inside: r.inside, pose: r.pose, walking: r.walking, visible: r.g.visible, yaw: r.yaw, faceYaw: r.faceYaw, talkUntil: r.talkUntil, talkWith: r.talkWith?.name ?? null, bubble: r.bubble.visible ? r.bubble.kind : null, site: r.site, atSpot: r.atSpot, pathLen: r.path.length - r.pi, mood: moodOf(r).label, friendships: { ...r.friendships }, memories: r.memories.slice() })),
   screenOf(i) { const r = residents[i]; _p.set(r.g.position.x, r.g.position.y + 1.2, r.g.position.z).project(camera); return { x: (_p.x + 1) / 2 * innerWidth, y: (1 - _p.y) / 2 * innerHeight }; },
   footprints: FOOTPRINTS.map(f => ({ site: f.site, r: f.r, porch: !!f.porch })),
@@ -846,21 +1377,28 @@ window.__tlw = {
   quality: () => ({ setting: settings.quality, level: qLevel, fps: perf.fps, downgrades: perf.downgrades, pixelRatio: renderer.getPixelRatio(), shadowMap: sun.castShadow ? sun.shadow.mapSize.x : 0 }),
   saveProblem: () => saveProblem,
   debug: { // test hooks
-    setMinutes(m) { minutes = m; },
+    setMinutes(m) { society.setTime(day, m); syncClock(); },
     // run the simulation synchronously (as at high speed) and report anyone visible inside a building or off the map
     run(mins, check = true) { let bad = [], n = Math.round(mins / .12); for (let k = 0; k < n; k++) { step(.12); if (check) for (const r of residents) { if (!Number.isFinite(r.pos.x + r.pos.z)) bad.push(r.name + ' NaN'); else if (r.inside < 0 && insideFootprint(r.pos.x, r.pos.z)) bad.push(r.name + ' inside @' + r.pos.x.toFixed(1) + ',' + r.pos.z.toFixed(1)); else if (Math.abs(r.pos.x) > 31.5 || Math.abs(r.pos.z) > 31.5) bad.push(r.name + ' off map'); } } return bad.slice(0, 10); },
     route(i, site) { const r = residents[i], S = nav.sites[site]; return nav.path(r.pos, S.E).map(p => [p.x, p.z]); },
     allRoutes() { const out = []; for (let a = 0; a < 9; a++) for (let b = 0; b < 9; b++) { if (a === b) continue; const e = nav.node(nav.sites[a].E); for (const t of [nav.sites[b].E, ...nav.sites[b].spots.map(sp => sp.node)]) out.push({ a, b, pts: [[e.x, e.z], ...nav.path(e, t).map(p => [p.x, p.z])] }); } return out; },
     edges() { const out = []; nav.adjacency.forEach((l, i) => l.forEach(([j]) => { if (i < j) out.push([nav.nodes[i].x, nav.nodes[i].z, nav.nodes[j].x, nav.nodes[j].z]); })); return out; },
     segmentBlocked,
-    placeNear(i, j) { const a = residents[i], b = residents[j]; placeAt(a, -7.6, 5.55); placeAt(b, -6.4, 5.55); a.next = b.next = minutes + 60; },
+    placeNear(i, j) { const a = residents[i], b = residents[j]; placeAt(a, -7.6, 5.55); placeAt(b, -6.4, 5.55); a.hold = b.hold = true; },
     chat(i, j) { chat(residents[i], residents[j]); },
     characters() { return residents.map(r => { const b = new THREE.Box3().setFromObject(r.rig.body); let meshes = 0, tris = 0, sig = 0; r.rig.body.traverse(o => { if (o.isMesh) { meshes++; const c = o.geometry.attributes.color; tris += o.geometry.attributes.position.count / 3; for (let k = 0; k < c.count; k += 7) sig = (sig * 31 + Math.round(c.getX(k) * 255) * 7 + Math.round(c.getY(k) * 255) * 13 + Math.round(c.getZ(k) * 255)) % 1e9; } }); return { name: r.name, meshes, tris, sig, height: b.max.y - b.min.y, legL: r.rig.legL.rotation.x, armR: r.rig.armR.rotation.x, bodyY: r.rig.body.position.y }; }); },
-    place(i, x, z) { const r = residents[i]; placeAt(r, x, z); r.next = minutes + 999; },
-    wake() { residents.forEach(r => { r.next = 0; r.forcePose = null; }); },
-    lineup(x0, z, dx, yaw) { residents.forEach((r, i) => { placeAt(r, x0 + i * dx, z); r.faceYaw = r.yaw = yaw; r.next = minutes + 999; }); },
+    place(i, x, z) { const r = residents[i]; placeAt(r, x, z); r.hold = true; },
+    wake() { residents.forEach(r => { r.hold = false; r.decSeq = -1; r.forcePose = null; }); },
+    lineup(x0, z, dx, yaw) { residents.forEach((r, i) => { placeAt(r, x0 + i * dx, z); r.faceYaw = r.yaw = yaw; r.hold = true; }); },
     pose(i, p, walking) { const r = residents[i]; r.forcePose = p; r.walking = !!walking; },
-    walkTo(i, site) { const r = residents[i]; r.state = 'Out exploring'; r.dest = [sites[site][0], sites[site][1]]; r.next = minutes + 500; planRoute(r); },
+    walkTo(i, site) { const r = residents[i]; r.state = 'Out exploring'; r.hold = true; planRoute(r, site, { enter: false }); },
+    // v0.5 hooks
+    society: () => society, syncPlots: () => syncPlots(true), openPlace, openTown, closePanels, pickPlot, plotAt,
+    advanceDays(n) { for (let k = 0; k < n * 24; k++) society.advance(60); syncClock(); lastEventSeq = society.s.seq.ev; residents.forEach(r => { r.decSeq = -1; r.hold = false; }); syncPlots(true); },
+    workers: () => workers.map(w => ({ visible: w.g.visible, state: w.state, x: w.pos.x, z: w.pos.z, job: w.job })),
+    plotKeys: () => Object.fromEntries(Object.keys(world.PLOT_ANCHOR).map(p => [p, world.plotKey(p)])),
+    screenOfPoint(x, y, z) { _p.set(x, y, z).project(camera); return { x: (_p.x + 1) / 2 * innerWidth, y: (1 - _p.y) / 2 * innerHeight }; },
+    savePayload,
   },
 };
 </script>

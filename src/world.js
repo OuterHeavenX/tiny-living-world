@@ -23,7 +23,7 @@ const P = {
 
 export function buildWorld(scene, sites, opts = {}) {
   const t0 = performance.now();
-  const rnd = mulberry32(opts.seed ?? 20261023);
+  let rnd = mulberry32(opts.seed ?? 20261023); // swapped for a per-plot generator when a plot is rebuilt
   const R = (a, b) => a + (b - a) * rnd();
   const pick = a => a[Math.floor(rnd() * a.length)];
   const dark = (c, k = .72) => new THREE.Color(c).multiplyScalar(k).getHex();
@@ -79,7 +79,8 @@ export function buildWorld(scene, sites, opts = {}) {
       geo.computeBoundingSphere(); return geo;
     }
   }
-  const W = new Batch(), F = new Batch(), GL = new Batch();
+  let W = new Batch(), F = new Batch(), GL = new Batch(); // current target batches (plots build into their own)
+  let dyn = false, addTarget = null; // building a plot's dynamic content: no keep-out areas, add meshes to its group
 
   /* ---------- transforms ---------- */
   const base = new THREE.Matrix4(), _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _p = new THREE.Vector3(), _s = new THREE.Vector3();
@@ -95,7 +96,7 @@ export function buildWorld(scene, sites, opts = {}) {
 
   /* ---------- keep-out areas for scattered decoration ---------- */
   const keep = [];
-  const keepL = (x0, z0, x1, z1) => keep.push([wx(Math.min(x0, x1)), wz(Math.min(z0, z1)), wx(Math.max(x0, x1)), wz(Math.max(z0, z1))]);
+  const keepL = (x0, z0, x1, z1) => dyn || keep.push([wx(Math.min(x0, x1)), wz(Math.min(z0, z1)), wx(Math.max(x0, x1)), wz(Math.max(z0, z1))]);
   const free = (x, z, r = .3) => !keep.some(k => x > k[0] - r && x < k[2] + r && z > k[1] - r && z < k[3] + r);
 
   const lampSpots = [], flowerSpots = [], swing = {};
@@ -173,7 +174,7 @@ export function buildWorld(scene, sites, opts = {}) {
     GL.add(Geo.box, P.lamp, at(x, 3.35, z, 0, .32, .46, .32), 0);
     for (const [dx, dz] of [[-.17, -.17], [.17, -.17], [-.17, .17], [.17, .17]]) box(W, P.iron, x + dx, 3.35, z + dz, .05, .5, .05, 0, 0);
     cone(W, P.iron, x, 3.6, z, .38, .34, 4, 0); cyl(W, P.iron, x, 3.92, z, .05, .16, 6, 0);
-    lampSpots.push([wx(x), wz(z), 2.8]);
+    if (!dyn) lampSpots.push([wx(x), wz(z), 2.8]);
   }
   function picket(x0, z0, x1, z1, c = P.white, h = .78) {
     const dx = x1 - x0, dz = z1 - z0, L = Math.hypot(dx, dz), ry = Math.atan2(-dz, dx), mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;
@@ -311,7 +312,7 @@ export function buildWorld(scene, sites, opts = {}) {
   function sign(i, x, y, z, w, ry = 0) {
     const h = w / SIGN_ASPECT, g = new THREE.PlaneGeometry(w, h), uv = g.attributes.uv;
     for (let k = 0; k < uv.count; k++) uv.setY(k, (SIGNS.length - 1 - i + uv.getY(k)) / SIGNS.length);
-    const m = new THREE.Mesh(g, signMat); m.position.set(wx(x), wy(y), wz(z) + .07); m.rotation.y = ry; m.receiveShadow = true; scene.add(m);
+    const m = new THREE.Mesh(g, signMat); placeOnBase(m, x, y, z + .07, ry); m.receiveShadow = true; (addTarget || scene).add(m);
     box(W, P.woodD, x, y, z + .02, w + .16, h + .16, .08, ry, 0);
     return m;
   }
@@ -344,6 +345,48 @@ export function buildWorld(scene, sites, opts = {}) {
     const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
   })();
   const signMat = new THREE.MeshStandardMaterial({ map: signTex, roughness: .75 });
+  // place a separate mesh at a local position under the current transform (sites may be rotated when rebuilt)
+  function placeOnBase(m, x, y, z, ry = 0) { _p.set(x, y, z).applyMatrix4(base); m.position.copy(_p); m.rotation.y = ry + Math.atan2(base.elements[8], base.elements[10]); }
+  // signs for new businesses: one small canvas texture per name
+  const dynSignCache = new Map();
+  const SIGN_STYLE = {
+    bakery: ['#fff1d6', '#8a3b22', '#f2a93b', 'sun'], cafe: ['#2f4a3a', '#ffe9c7', '#e8b45a', 'cup'], florist: ['#5f8a68', '#fffaf0', '#ffb3c8', 'flower'],
+    repair: ['#30343b', '#ffd166', '#ff8c2a', 'gear'], bookstore: ['#3b2f5c', '#f6e7c8', '#d9b36b', 'book'], general: ['#f4efe2', '#2f5f8a', '#d9493c', 'basket'],
+    restaurant: ['#5a1f24', '#ffe3b0', '#e8b45a', 'fork'], gallery: ['#ffffff', '#222222', '#e8493c', 'frame'], house: ['#f7f3ea', '#5a3e2b', '#9a6a4a', 'leaf'],
+    board: ['#fffbe8', '#3a3328', '#f2a93b', 'cone'], warn: ['#ffd23f', '#2b2b2b', '#2b2b2b', 'bang'], sale: ['#ffffff', '#c0392b', '#c0392b', 'tag'],
+  };
+  function signTexture(text, style, sub) {
+    const key = style + '|' + text + '|' + (sub || ''); let t = dynSignCache.get(key); if (t) return t;
+    const [bg, fg, ac, icon] = SIGN_STYLE[style] || SIGN_STYLE.board;
+    const cv = document.createElement('canvas'); cv.width = 512; cv.height = sub ? 160 : 100; const c = cv.getContext('2d');
+    c.fillStyle = bg; c.fillRect(0, 0, cv.width, cv.height); c.strokeStyle = ac; c.lineWidth = 6; c.strokeRect(7, 7, cv.width - 14, cv.height - 14);
+    c.fillStyle = ac; const ix = 52, iy = sub ? 58 : 50; c.beginPath();
+    if (icon === 'sun') { c.arc(ix, iy, 16, 0, PI * 2); c.fill(); for (let k = 0; k < 8; k++) { const a = k * PI / 4; c.fillRect(ix + Math.cos(a) * 25 - 3, iy + Math.sin(a) * 25 - 3, 6, 6); } }
+    else if (icon === 'cup') { c.fillRect(ix - 16, iy - 12, 26, 26); c.arc(ix + 13, iy, 7, -PI / 2, PI / 2); c.fill(); }
+    else if (icon === 'flower') { for (let k = 0; k < 5; k++) { const a = k * PI * 2 / 5; c.moveTo(ix, iy); c.arc(ix + Math.cos(a) * 13, iy + Math.sin(a) * 13, 10, 0, PI * 2); } c.fill(); }
+    else if (icon === 'gear') { c.arc(ix, iy, 17, 0, PI * 2); c.fill(); for (let k = 0; k < 8; k++) { const a = k * PI / 4; c.fillRect(ix + Math.cos(a) * 20 - 5, iy + Math.sin(a) * 20 - 5, 10, 10); } c.fillStyle = bg; c.beginPath(); c.arc(ix, iy, 7, 0, PI * 2); c.fill(); }
+    else if (icon === 'book') { c.fillRect(ix - 20, iy - 14, 18, 28); c.fillRect(ix + 2, iy - 14, 18, 28); }
+    else if (icon === 'basket') { c.fillRect(ix - 20, iy - 2, 40, 18); c.arc(ix, iy - 2, 16, PI, 0); c.lineWidth = 5; c.strokeStyle = ac; c.stroke(); }
+    else if (icon === 'fork') { c.fillRect(ix - 12, iy - 18, 5, 36); c.fillRect(ix - 18, iy - 18, 4, 14); c.fillRect(ix - 6, iy - 18, 4, 14); c.fillRect(ix + 8, iy - 18, 7, 36); }
+    else if (icon === 'frame') { c.lineWidth = 7; c.strokeStyle = ac; c.strokeRect(ix - 18, iy - 15, 36, 30); }
+    else if (icon === 'cone') { c.moveTo(ix, iy - 20); c.lineTo(ix + 15, iy + 18); c.lineTo(ix - 15, iy + 18); c.fill(); }
+    else if (icon === 'bang') { c.moveTo(ix, iy - 22); c.lineTo(ix + 22, iy + 18); c.lineTo(ix - 22, iy + 18); c.fill(); c.fillStyle = bg; c.fillRect(ix - 2, iy - 8, 4, 14); c.fillRect(ix - 2, iy + 9, 4, 4); }
+    else if (icon === 'tag') { c.moveTo(ix - 18, iy - 12); c.lineTo(ix + 8, iy - 12); c.lineTo(ix + 20, iy); c.lineTo(ix + 8, iy + 12); c.lineTo(ix - 18, iy + 12); c.fill(); }
+    else { c.ellipse(ix, iy, 11, 20, .6, 0, PI * 2); c.fill(); }
+    c.fillStyle = fg; c.textAlign = 'left'; c.textBaseline = 'middle';
+    let size = 46; c.font = `700 ${size}px Georgia, "Times New Roman", serif`; while (c.measureText(text).width > 410 && size > 22) { size -= 2; c.font = `700 ${size}px Georgia, "Times New Roman", serif`; }
+    c.fillText(text, 90, sub ? 58 : 52);
+    if (sub) { c.font = '600 30px system-ui, sans-serif'; c.fillStyle = fg; c.globalAlpha = .8; let ss = 30; while (c.measureText(sub).width > 470 && ss > 16) { ss -= 2; c.font = `600 ${ss}px system-ui, sans-serif`; } c.fillText(sub, 24, 122); c.globalAlpha = 1; }
+    t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; dynSignCache.set(key, t); return t;
+  }
+  function dynSign(text, style, x, y, z, w, ry = 0, sub = null) {
+    if (!text) { box(W, P.woodD, x, y, z + .02, w + .14, w * .2 + .14, .08, ry, 0); return null; }
+    const tex = signTexture(text, style, sub), h = w * tex.image.height / tex.image.width;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, roughness: .75 }));
+    placeOnBase(m, x, y, z + .07, ry); m.receiveShadow = true; m.userData.dispose = true; (addTarget || scene).add(m);
+    box(W, P.woodD, x, y, z + .02, w + .14, h + .14, .08, ry, 0);
+    return m;
+  }
 
   /* ================= LOCATIONS ================= */
   const fitBoxes = [], siteInfo = [];
@@ -620,15 +663,25 @@ export function buildWorld(scene, sites, opts = {}) {
   }
 
   const builders = { 'Oliver’s Cottage': oliversCottage, 'Emma’s House': emmasHouse, 'Sarah’s House': sarahsHouse, 'Shared House': sharedHouse, 'Sunrise Bakery': bakery, 'Willowbrook Park': park, 'Petal & Stem': florist, 'Corner Café': cafe, 'Town Hall': townHall };
-  for (const [x, z, name, col] of sites) {
+  // Commercial plots and open lots are built into their own batches so they can be replaced later.
+  const DYN_SITE = { 4: 'P005', 6: 'P007', 7: 'P008' };
+  const plotOrig = {}; let savedBatches = null;
+  function beginPlot(pid) { savedBatches = { W, F, GL, rnd }; W = new Batch(); F = new Batch(); GL = new Batch(); addTarget = new THREE.Group(); addTarget.name = 'plot:' + pid + ':original'; }
+  function endPlot(pid, extra = {}) { plotOrig[pid] = { W, F, GL, group: addTarget, ...extra }; ({ W, F, GL, rnd } = savedBatches); addTarget = null; }
+  sites.forEach(([x, z, name, col], i) => {
     track = new THREE.Box3();
+    const pid = DYN_SITE[i]; if (pid) beginPlot(pid);
+    const lights0 = cafeLights.length;
     withT(x, 0, z, 0, () => builders[name](col));
+    if (pid) endPlot(pid, { lights: cafeLights.slice(lights0) });
     // fit the camera to the buildings themselves (not yards); park uses its footprint
     const core = track.clone(); core.min.x = Math.max(core.min.x, x - 4.3); core.max.x = Math.min(core.max.x, x + 4.3); core.min.z = Math.max(core.min.z, z - 3.6); core.max.z = Math.min(core.max.z, z + 4.6);
     siteInfo.push({ name, x, z, box: core, full: track.clone() });
     track = null;
-  }
-  withT(-23, 0, 21, 0, pond); withT(-6.5, 0, 20.5, 0, communityGarden); withT(22.5, 0, 20.5, 0, orchard);
+  });
+  withT(-23, 0, 21, 0, pond);
+  beginPlot('P010'); withT(-6.5, 0, 20.5, 0, communityGarden); endPlot('P010');
+  beginPlot('P011'); withT(22.5, 0, 20.5, 0, orchard); endPlot('P011');
 
   /* ---------- lamps along the streets ---------- */
   for (const xr of vRoads) for (const zr of hRoads) for (const [sx, sz] of [[-1, -1], [1, 1]]) lamp(xr + sx * (RV + .55), zr + sz * (RH + .55));
@@ -681,12 +734,42 @@ export function buildWorld(scene, sites, opts = {}) {
 
   // light pools under lamps and café string lights (night)
   const poolTex = (() => { const cv = document.createElement('canvas'); cv.width = cv.height = 64; const x = cv.getContext('2d'); const g = x.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(.45, 'rgba(255,255,255,.35)'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(cv); })();
-  const spots = [...lampSpots, ...cafeLights.filter((_, i) => i % 3 === 0).map(([x, z]) => [x, z, 1.8])];
-  const pg = new THREE.BufferGeometry(), pp = [], pu = [];
-  for (const [x, z, r] of spots) { const q = [[-r, -r], [r, -r], [r, r], [-r, -r], [r, r], [-r, r]]; for (const [a, b] of q) { pp.push(x + a, .17, z + b); pu.push(a > 0 ? 1 : 0, b > 0 ? 0 : 1); } }
-  pg.setAttribute('position', new THREE.Float32BufferAttribute(pp, 3)); pg.setAttribute('uv', new THREE.Float32BufferAttribute(pu, 2));
   const poolMat = new THREE.MeshBasicMaterial({ map: poolTex, color: 0xffb35c, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
-  const pools = new THREE.Mesh(pg, poolMat); pools.renderOrder = 2; pools.name = 'lightPools'; scene.add(pools);
+  function poolMesh(spots) {
+    const pg = new THREE.BufferGeometry(), pp = [], pu = [];
+    for (const [x, z, r] of spots) { const q = [[-r, -r], [r, -r], [r, r], [-r, -r], [r, r], [-r, r]]; for (const [a, b] of q) { pp.push(x + a, .17, z + b); pu.push(a > 0 ? 1 : 0, b > 0 ? 0 : 1); } }
+    pg.setAttribute('position', new THREE.Float32BufferAttribute(pp, 3)); pg.setAttribute('uv', new THREE.Float32BufferAttribute(pu, 2));
+    const m = new THREE.Mesh(pg, poolMat); m.renderOrder = 2; m.name = 'lightPools'; return m;
+  }
+  scene.add(poolMesh(lampSpots));
+  // the plots' own meshes (original buildings), with clipping-capable materials for staged demolition
+  const glowMats = [glowMat];
+  const plotMats = {};
+  function matsFor(key) {
+    if (plotMats[key]) return plotMats[key];
+    const plane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e4), cp = [plane];
+    const m = {
+      plane,
+      world: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: .88, metalness: 0, clippingPlanes: cp }),
+      fol: swayify(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: .9, clippingPlanes: cp })),
+      folDepth: swayify(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, clippingPlanes: cp })),
+      depth: new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, clippingPlanes: cp }),
+      glow: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: .25, metalness: .1, emissive: 0xffc46b, emissiveIntensity: 0, clippingPlanes: cp }),
+    };
+    glowMats.push(m.glow); return (plotMats[key] = m);
+  }
+  function meshesInto(group, b, mats, name) {
+    const out = [];
+    if (b.W.parts.length) { const m = new THREE.Mesh(b.W.geometry(), mats.world); m.castShadow = m.receiveShadow = true; m.customDepthMaterial = mats.depth; m.name = name; group.add(m); out.push(m); }
+    if (b.F.parts.length) { const m = new THREE.Mesh(b.F.geometry(true), mats.fol); m.castShadow = m.receiveShadow = true; m.customDepthMaterial = mats.folDepth; group.add(m); out.push(m); }
+    if (b.GL.parts.length) { const m = new THREE.Mesh(b.GL.geometry(), mats.glow); m.receiveShadow = true; group.add(m); out.push(m); }
+    return out;
+  }
+  for (const [pid, o] of Object.entries(plotOrig)) {
+    meshesInto(o.group, o, matsFor(pid + ':o'), 'plot:' + pid);
+    if (o.lights?.length) o.group.add(poolMesh(o.lights.filter((_, i) => i % 3 === 0).map(([x, z]) => [x, z, 1.8])));
+    scene.add(o.group);
+  }
 
   /* ================= AMBIENT ANIMATION ================= */
   const dummy = new THREE.Object3D();
@@ -754,7 +837,7 @@ export function buildWorld(scene, sites, opts = {}) {
     sun.color.copy(sunCol); sun.intensity = .32 + daylight * 2.35;
     hemi.intensity = .72 + daylight * .55; hemi.color.set(0x2c3f72).lerp(tmpC.set(0xdff0ff), daylight); hemi.groundColor.set(0x1d2b2a).lerp(tmpC.set(0x7a9a63), daylight);
     fill.intensity = .15 + daylight * .25;
-    glowMat.emissiveIntensity = state.night * 1.35; poolMat.opacity = state.night * .85;
+    for (const g of glowMats) g.emissiveIntensity = state.night * 1.35; poolMat.opacity = state.night * .85;
     skyAt(h); const css = `linear-gradient(to bottom, #${cTop.getHexString()} 0%, #${cBot.getHexString()} 100%)`;
     if (css !== lastSky && opts.skyEl) { opts.skyEl.style.background = css; lastSky = css; }
     // ambient motion (real time)
@@ -770,7 +853,8 @@ export function buildWorld(scene, sites, opts = {}) {
       dummy.position.set(cx + p * 1.4 + Math.sin(t * .6 + i) * .15 * p, cy + p * 3.4, cz - p * .5); dummy.rotation.set(i, t * .2 + i, 0);
       dummy.scale.setScalar((.22 + p * .6) * Math.min(1, (1 - p) * 3)); dummy.updateMatrix(); smoke.setMatrixAt(i, dummy.matrix);
     }
-    smoke.instanceMatrix.needsUpdate = true;
+    smoke.instanceMatrix.needsUpdate = true; smoke.visible = smokeOn;
+    animatePlots(t);
     const showB = daylight > .3;
     wingsR.visible = wingsL.visible = showB;
     if (showB) bfly.forEach((b, i) => {
@@ -793,6 +877,254 @@ export function buildWorld(scene, sites, opts = {}) {
     hourHand.rotation.z = -((minutes / 60) % 12) / 12 * PI * 2; minHand.rotation.z = -(minutes % 60) / 60 * PI * 2;
   }
 
+  /* ================= LIVING PLOTS: new buildings, demolition and construction ================= */
+  // Where a new structure stands on each redevelopable plot (front faces +z locally; ry turns it to the street).
+  const PLOT_ANCHOR = {
+    P005: { x: -20, z: 0, ry: 0, w: 7.2, d: 5.6, site: 4 }, P007: { x: 7, z: 0, ry: 0, w: 6.8, d: 5.4, site: 6 }, P008: { x: 21, z: 0, ry: 0, w: 7.0, d: 5.6, site: 7 },
+    P010: { x: -6.5, z: 16.5, ry: PI, w: 7.0, d: 5.6, site: 9 }, P011: { x: 22.5, z: 16.5, ry: PI, w: 7.0, d: 5.6, site: 10 },
+  };
+  let smokeOn = true;
+  const plotDyn = {}, plotKeys = {}, plotAnims = {};
+  const ORANGE = 0xff7a1a, CONCRETE = 0xb9b4aa, LUMBER = 0xd8b07a, STEEL = 0x8c969c, SOIL = 0x9b7653, YELLOW = 0xf2b632;
+  const awning = (w, d, y, cols, depth = 1.3, tilt = .42) => { const n = Math.max(6, Math.round(w / .55)); for (let i = 0; i < n; i++) { const x = -w / 2 + w / n * (i + .5), col = cols[i % cols.length]; W.add(Geo.box, col, at(x, y, d / 2 + depth / 2 - .05, 0, w / n + .01, .06, depth, tilt), 0); W.add(Geo.halfDisc, col, at(x, y - Math.sin(tilt) * depth / 2 - .02, d / 2 + depth - .1, 0, w / n / 2, -.18, .04), 0); } };
+  const wallLamp = (x, y, z) => { GL.add(Geo.box, 0xffe2a8, at(x, y, z + .2, 0, .18, .28, .18), 0); box(W, P.iron, x, y + .19, z + .2, .24, .06, .24, 0, 0); };
+
+  // ---------- one recognisable building per business category ----------
+  const GEN = {
+    bakery(n) {
+      const w = 6.8, d = 5.4, h = 3.9, c = pick([0xf3dcb4, 0xf6e3c5, 0xefd2a8]), red = pick([0x8c3b2c, 0x6e4a35]);
+      shell(w, d, h, c, { trim: 0xfff1d6 }); hip(w, d, h, 1.9, .45, pick([0xb85c48, 0xc36d56])); chimney(-2.2, -1.3, h, h + 2.2);
+      for (const sx of [-2.1, 2.1]) { win(sx, 1.7, d / 2, 1.8, 1.5, { frame: red, mull: false }); for (let k = 0; k < 5; k++) W.add(Geo.ico1, pick([0xc98a4b, 0xd9a05b, 0xb8743c]), at(sx - .7 + k * .35, 1.05, d / 2 + .14, R(0, 1), .15, .1, .12), .05); }
+      door(0, d / 2, 1.15, 2.2, red, { glassTop: true, frame: red });
+      awning(w + .3, d, 2.85, [0xd9493c, 0xfff4e0]); dynSign(n, 'bakery', 0, 3.45, d / 2 + .02, 3.4);
+      for (const sx of [-1.3, 1.3]) pot(sx, d / 2 + .55, .22, P.warm); tableSet(-2.6, d / 2 + 2.0, 2, 0xd9493c);
+      return { h: h + 2.2, chimney: true };
+    },
+    cafe(n) {
+      const w = 7.0, d = 5.4, h = 4.2, c = pick([0x7d5a46, 0x8f6b52, 0x6f8f7a]), trim = 0xf3e7d3;
+      shell(w, d, h, c, { trim }); boxB(W, dark(c, .85), 0, h, 0, w + .3, .45, d + .3, 0, .02); boxB(W, 0x7d746a, 0, h, 0, w - .3, .47, d - .3, 0, .02);
+      for (const sx of [-2.15, 2.15]) win(sx, 1.55, d / 2, 1.9, 1.45, { frame: trim });
+      door(0, d / 2, 1.15, 2.1, 0x2f4a3a, { glassTop: true, frame: trim }); awning(w + .2, d, 2.75, [0x2f6b4a, 0xf3e7d3]);
+      dynSign(n, 'cafe', 0, 3.5, d / 2 + .02, 3.2); wallLamp(-.95, 2.15, d / 2); wallLamp(.95, 2.15, d / 2);
+      cyl(W, P.white, 1.8, h + .45, -.8, .6, .07, 16, 0); cyl(W, P.white, 1.8, h + .52, -.8, .42, .7, 12, 0); cyl(W, 0x4a2c1d, 1.8, h + 1.22, -.8, .37, .04, 12, 0);
+      tableSet(-2.5, d / 2 + 2.0, 2, 0xfff4e0); tableSet(2.5, d / 2 + 2.0, 2, 0x2f6b4a);
+      return { h: h + 1.3 };
+    },
+    florist(n) {
+      const w = 6.4, d = 5.2, h = 3.8, c = pick([0xf2e6ef, 0xe8f0e0, 0xf6efe0]), green = pick([0x4f7a5a, 0x5d8a64]);
+      shell(w, d, h, c, {}); roof({ kind: 'mansard', w, d, h0: h, rh: 1.9, oh: .4, ohe: .25, roof: green, wall: c });
+      for (const sx of [-1.95, 1.95]) win(sx, 1.7, d / 2, 1.3, 1.3, { arch: true, flowers: P.flowers, boxColor: green });
+      door(0, d / 2, 1.1, 2.1, green, { arch: true, glassTop: true }); dynSign(n, 'florist', 0, 3.45, d / 2 + .02, 3.2);
+      for (const sx of [-2.6, 2.6]) { for (let t = 0; t < 3; t++) boxB(W, P.woodL, sx, 0, d / 2 + .95 + t * .42, 1.2, .66 - t * .2, .42, 0, .04); for (let k = 0; k < 6; k++) fol(Geo.octa, pick(P.flowers), sx + R(-.5, .5), R(.7, .95), d / 2 + 1.2 + R(-.4, .4), .1, .09, .1, .4, .5); }
+      roundTree(3.6, -3.4, .8, [0xf2a7c3, 0xf7bfd3]);
+      return { h: h + 1.9 };
+    },
+    repair(n) {
+      const w = 7.4, d = 5.8, h = 3.8, c = pick([0x8a949b, 0x9aa5a0, 0x7f8b94]), metal = pick([0x55606b, 0x6b4f3f]);
+      boxB(W, c, 0, 0, 0, w, h, d, 0, .02); boxB(W, P.stone, 0, 0, 0, w + .2, .3, d + .2, 0, .02);
+      for (let x = -w / 2 + .3; x < w / 2; x += .45) box(W, dark(c, .9), x, h / 2, d / 2 + .02, .05, h - .3, .03, 0, 0); // corrugated ribs
+      roof({ w, d, h0: h, rh: 1.4, oh: .35, ohe: .2, roof: metal, wall: c });
+      boxB(W, 0x3a3f45, -1.2, .05, d / 2 + .04, 3.4, 2.9, .1, 0, 0); for (let k = 0; k < 9; k++) box(W, 0x55606b, -1.2, .3 + k * .32, d / 2 + .1, 3.3, .06, .03, 0, 0); // roll-up door
+      for (let k = 0; k < 5; k++) box(W, k % 2 ? 0x222222 : YELLOW, -1.2 - 1.6 + k * .8, 3.08, d / 2 + .1, .8, .14, .05, 0, 0);
+      door(2.4, d / 2, .95, 2.05, 0x3f6fae, { glassTop: true }); win(2.4, 3.0, d / 2, .9, .5, { mull: false });
+      dynSign(n, 'repair', 0, h + .35, d / 2 + .25, 3.6);
+      for (let k = 0; k < 4; k++) W.add(Geo.torus, 0x222222, at(-3.6, .14 + k * .2, d / 2 + 1.0, 0, .32, .32, .32, PI / 2), .03); // tyre stack
+      barrel(3.4, d / 2 + .9, 0x3f6fae); barrel(3.4, d / 2 + 1.7, 0xd9493c); crate(-3.3, -2.2);
+      return { h: h + 1.5 };
+    },
+    bookstore(n) {
+      const w = 6.4, d = 5.4, h = 5.0, c = pick([0x7b5a8a, 0x5f7d95, 0x8a5a4a]), trim = 0xf6e7c8;
+      shell(w, d, h, c, { trim }); box(W, trim, 0, 2.5, 0, w + .1, .14, d + .1, 0, .02);
+      roof({ kind: 'gambrel', w, d, h0: h, rh: 2.4, oh: .4, ohe: .3, roof: 0x3b2f5c, wall: c, along: 'z' });
+      boxB(W, c, -1.4, .4, d / 2 + .4, 2.4, 1.9, .8, 0, .02); win(-1.4, 1.4, d / 2 + .82, 1.9, 1.1, { frame: trim });
+      for (let k = 0; k < 8; k++) boxB(W, pick([0xd9493c, 0x3f6fae, 0xf2c14e, 0x5fa04f, 0xffffff]), -2.2 + k * .23, .92, d / 2 + .7, .18, R(.3, .45), .25, 0, .03);
+      hip(2.4, .8, 2.3, .5, .12, 0x3b2f5c, -1.4, d / 2 + .4);
+      door(1.7, d / 2, 1.0, 2.1, 0x3b2f5c, { glassTop: true, frame: trim });
+      for (const sx of [-1.7, 1.7]) win(sx, 3.6, d / 2, .9, 1.0, { frame: trim, shutter: dark(c, .7) });
+      dynSign(n, 'bookstore', .2, 2.95, d / 2 + .02, 3.2); bench(2.5, d / 2 + 1.9, 0);
+      return { h: h + 2.4 };
+    },
+    general(n) {
+      const w = 7.6, d = 5.6, h = 4.0, c = pick([0xe9d9b8, 0xd8e2e8, 0xe8d0c0]), blue = pick([0x2f5f8a, 0x8a3b3b]);
+      shell(w, d, h, c, {}); boxB(W, dark(c, .9), 0, h, 0, w + .3, .55, d + .3, 0, .02);
+      for (const sx of [-2.6, 2.6]) win(sx, 1.6, d / 2, 1.8, 1.4, { frame: blue });
+      door(0, d / 2, 1.5, 2.2, blue, { glassTop: true }); awning(w + .4, d, 2.7, [blue, 0xffffff], 1.6, .32);
+      dynSign(n, 'general', 0, 3.5, d / 2 + .02, 4.0);
+      for (const sx of [-2.8, -1.6, 1.6, 2.8]) { boxB(W, 0xc39a68, sx, 0, d / 2 + 1.2, .9, .5, .6, 0, .05); for (let k = 0; k < 6; k++) W.add(Geo.ico0, pick([0xd9493c, 0xf2a93b, 0x5fa04f, 0xffd166]), at(sx + R(-.32, .32), .58, d / 2 + 1.2 + R(-.2, .2), 0, .1, .1, .1), .05); }
+      return { h: h + .6 };
+    },
+    restaurant(n) {
+      const w = 7.2, d = 5.8, h = 5.2, c = pick([0x9a4a3f, 0xb5654a, 0x7d5a46]), trim = 0xf3e7d3;
+      shell(w, d, h, c, { trim }); box(W, trim, 0, 2.7, 0, w + .1, .16, d + .1, 0, .02);
+      roof({ w, d, h0: h, rh: 2.2, oh: .45, ohe: .3, roof: 0x3d3a3a, wall: c }); chimney(2.4, -1.4, h, h + 2.6, 0x8f8a80);
+      for (const sx of [-2.3, 2.3]) { win(sx, 1.5, d / 2, 1.6, 1.4, { frame: trim, arch: true }); win(sx, 3.9, d / 2, 1.0, 1.0, { frame: trim, flowers: P.warm }); }
+      door(0, d / 2, 1.3, 2.3, 0x3a2a20, { glassTop: true, transom: true, frame: trim });
+      dynSign(n, 'restaurant', 0, 3.25, d / 2 + .02, 3.0); wallLamp(-1.2, 2.3, d / 2); wallLamp(1.2, 2.3, d / 2);
+      for (let i = 0; i <= 10; i++) { const x = -w / 2 + w * i / 10; GL.add(Geo.octa, 0xffe6a8, at(x, 2.55 - Math.sin(i / 10 * PI) * .3, d / 2 + .9, 0, .09, .12, .09), 0); }
+      tableSet(-2.3, d / 2 + 2.1, 2, 0x5a1f24); tableSet(2.3, d / 2 + 2.1, 2, 0xfff4e0);
+      return { h: h + 2.6 };
+    },
+    gallery(n) {
+      const w = 7.0, d = 5.4, h = 4.4;
+      boxB(W, 0xf7f5ef, 0, 0, 0, w, h, d, 0, .01); boxB(W, 0xdcd8cf, 0, h, 0, w + .2, .25, d + .2, 0, .01); boxB(W, 0xb0aca4, 0, 0, 0, w + .2, .25, d + .2, 0, .01);
+      GL.add(Geo.box, P.glass, at(-.8, 1.9, d / 2 + .02, 0, 4.4, 2.9, .06), .02); box(W, 0x333333, -.8, 3.4, d / 2 + .05, 4.6, .1, .1, 0, 0); box(W, 0x333333, -.8, .45, d / 2 + .05, 4.6, .1, .1, 0, 0);
+      boxB(W, pick([0xe8493c, 0x3f6fae, 0xf2c14e]), 2.6, 0, d / 2 + .05, 1.0, h, .08, 0, 0);
+      door(2.6, d / 2 + .1, .95, 2.1, 0x333333, { glassTop: true, frame: 0x333333 });
+      for (let k = 0; k < 3; k++) boxB(W, pick([0xe8493c, 0x3f6fae, 0xf2c14e, 0x5fa04f]), -2.4 + k * 1.6, .9, d / 2 - .2, .9, 1.1, .05, 0, 0); // paintings inside
+      dynSign(n, 'gallery', -.8, h - .35, d / 2 + .04, 3.0);
+      boxB(W, 0xd6cfbf, -2.4, 0, d / 2 + 1.8, .8, .5, .8, 0, 0); W.add(Geo.torus, 0xe8493c, at(-2.4, 1.15, d / 2 + 1.8, .4, .38, .38, .38), 0); W.add(Geo.ico0, 0x3f6fae, at(-2.4, .75, d / 2 + 1.8, 0, .25, .25, .25), 0);
+      return { h: h + .3 };
+    },
+    house(n) {
+      const w = 6.0, d = 5.0, h = 3.4, c = pick([0xbad2ab, 0xe8bbc5, 0xb0cbe3, 0xf3dcb4]);
+      shell(w, d, h, c, {}); roof({ w, d, h0: h, rh: 2.3, oh: .5, ohe: .3, roof: pick([0x5f7d95, 0xa44a3f, 0x55606b]), wall: c }); chimney(1.8, -1.0, h, h + 2.3);
+      door(0, d / 2, 1.0, 2.0, 0x5a3e2b, { glassTop: true }); for (const sx of [-1.8, 1.8]) win(sx, 1.6, d / 2, .95, 1.05, { shutter: 0x3f5f7a, flowers: P.warm });
+      picket(-3.6, d / 2 + 2.4, -.7, d / 2 + 2.4); picket(.7, d / 2 + 2.4, 3.6, d / 2 + 2.4);
+      return { h: h + 2.3 };
+    },
+  };
+
+  // ---------- construction-site kit ----------
+  function fenceAround(w, d, gap = true) {
+    const hw = w / 2 + .7, hd = d / 2 + .8, panel = (x0, z0, x1, z1) => {
+      const L = Math.hypot(x1 - x0, z1 - z0), ry = Math.atan2(-(z1 - z0), x1 - x0), n = Math.max(1, Math.round(L / 1.5));
+      for (let i = 0; i <= n; i++) cyl(W, 0x555555, x0 + (x1 - x0) * i / n, 0, z0 + (z1 - z0) * i / n, .05, 1.15, 6, 0);
+      for (let i = 0; i < n; i++) { const u = (i + .5) / n, x = x0 + (x1 - x0) * u, z = z0 + (z1 - z0) * u; box(W, i % 2 ? ORANGE : 0xffffff, x, .82, z, L / n - .04, .22, .05, ry, 0); box(W, i % 2 ? 0xffffff : ORANGE, x, .42, z, L / n - .04, .22, .05, ry, 0); }
+    };
+    panel(-hw, -hd, hw, -hd); panel(-hw, -hd, -hw, hd); panel(hw, -hd, hw, hd);
+    if (gap) { panel(-hw, hd, -1.3, hd); panel(1.3, hd, hw, hd); } else panel(-hw, hd, hw, hd);
+    warnSign(-hw + .9, hd + .05); warnSign(hw - .9, hd + .05);
+  }
+  function warnSign(x, z) { cyl(W, 0x555555, x, 0, z, .04, 1.25, 6, 0); box(W, 0xffd23f, x, 1.45, z + .04, .5, .5, .04, 0, 0, 0, PI / 4); box(W, 0x2b2b2b, x, 1.47, z + .07, .06, .2, .02, 0, 0); box(W, 0x2b2b2b, x, 1.32, z + .07, .06, .06, .02, 0, 0); }
+  function projectBoard(x, z, title, sub, style = 'board') { for (const sx of [-.85, .85]) cyl(W, P.woodD, x + sx, 0, z, .06, 1.9, 6, 0); dynSign(title, style, x, 1.75, z + .03, 2.1, 0, sub); }
+  function excavator(x, z, ry, anim) {
+    withT(x, 0, z, ry, () => {
+      for (const s of [-1, 1]) { boxB(W, 0x2b2b2b, s * .62, 0, 0, .42, .45, 2.3, 0, 0); for (let k = 0; k < 4; k++) cyl(W, 0x555555, s * .62, .06, -.8 + k * .53, .17, .02, 8, 0, .17); }
+      boxB(W, YELLOW, 0, .45, -.2, 1.7, .7, 1.9, 0, .02); boxB(W, YELLOW, -.35, 1.15, .1, .9, .9, 1.0, 0, .02);
+      GL.add(Geo.box, P.glass, at(-.35, 1.65, .62, 0, .78, .5, .05), 0); boxB(W, 0x3a3a3a, .45, 1.15, -.8, .7, .25, .5, 0, 0);
+      const drawArm = () => { box(W, YELLOW, 0, .55, .95, .22, .22, 2.3, 0, 0, -.55); box(W, YELLOW, 0, 1.15, 2.15, .18, .18, 1.6, 0, 0, .9); box(W, 0x555555, 0, .45, 2.75, .6, .4, .45, 0, 0, .3); };
+      if (anim) {
+        const g = new THREE.Group(); placeOnBase(g, .4, 1.3, .4, 0);
+        const saved = W, sb = base.clone(); W = new Batch(); base.identity(); drawArm(); const arm = W; W = saved; base.copy(sb);
+        anim.push({ kind: 'arm', g, batch: arm });
+      } else withT(.4, 1.3, .4, 0, drawArm);
+    });
+  }
+  function dumpster(x, z, fill = 0, ry = 0) {
+    withT(x, 0, z, ry, () => {
+      boxB(W, 0x2f6b4a, 0, .1, 0, 2.0, .9, 1.1, 0, .02); boxB(W, 0x24543a, 0, 0, 0, 1.8, .12, .9, 0, 0); box(W, 0x24543a, 0, .98, 0, 2.06, .06, 1.16, 0, 0);
+      if (fill > 0) for (let i = 0; i < Math.round(fill * 9); i++) W.add(Geo.dode, pick([0x9a958c, 0xb5654a, 0x8f6b52, LUMBER]), at(R(-.75, .75), .85 + R(0, .25) * fill, R(-.35, .35), R(0, 6), R(.15, .3), R(.1, .2), R(.15, .3)), .05);
+    });
+  }
+  function rubble(w, d, amount, cols) {
+    const n = Math.round(amount * 26);
+    for (let i = 0; i < n; i++) { const x = R(-w / 2, w / 2), z = R(-d / 2, d / 2), s = R(.25, .65) * (.5 + amount * .7); W.add(Geo.dode, pick(cols), at(x, s * .25, z, R(0, 6), s * R(.9, 1.4), s * R(.5, .8), s * R(.8, 1.3), R(-.3, .3), R(-.3, .3)), .06); }
+    for (let i = 0; i < Math.round(amount * 6); i++) box(W, pick([LUMBER, 0x8f6b52]), R(-w / 2, w / 2), .12, R(-d / 2, d / 2), R(.8, 1.8), .1, .14, R(0, PI), .05, 0, R(-.3, .3));
+  }
+  function dirtLot(w, d) { boxB(W, SOIL, 0, 0, 0, w + 1.2, .05, d + 1.4, 0, .04); for (let i = 0; i < 10; i++) W.add(Geo.dode, pick([0x8a6a4a, 0x7a5d43, P.rock]), at(R(-w / 2, w / 2), .05, R(-d / 2, d / 2), R(0, 6), .16, .08, .14), .05); }
+  function scaffold(w, d, h) {
+    const hw = w / 2 + .45, hd = d / 2 + .45, lv = Math.max(1, Math.floor(h / 1.3));
+    for (const [x0, z0, x1, z1] of [[-hw, hd, hw, hd], [-hw, -hd, -hw, hd], [hw, -hd, hw, hd]]) {
+      const L = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(L / 1.6)), ry = Math.atan2(-(z1 - z0), x1 - x0);
+      for (let i = 0; i <= n; i++) cyl(W, STEEL, x0 + (x1 - x0) * i / n, 0, z0 + (z1 - z0) * i / n, .04, h + .4, 6, 0);
+      for (let k = 1; k <= lv; k++) { const y = k * h / lv; box(W, STEEL, (x0 + x1) / 2, y, (z0 + z1) / 2, L, .05, .05, ry, 0); box(W, LUMBER, (x0 + x1) / 2, y + .05, (z0 + z1) / 2 + (z0 === z1 ? (z0 > 0 ? -.18 : .18) : 0), L, .05, .32, ry, .04); }
+    }
+  }
+  function slab(w, d, t) { boxB(W, CONCRETE, 0, 0, 0, w + .2, .05 + .3 * t, d + .2, 0, .02); if (t < .95) for (let x = -w / 2; x <= w / 2; x += .6) box(W, 0x6b4f3f, x, .4 * t + .05, 0, .03, .03, d, 0, 0); }
+  function framing(w, d, h, t) {
+    const ph = h * clamp01(t * 1.25);
+    for (let x = -w / 2; x <= w / 2 + .01; x += w / 5) for (const z of [-d / 2, d / 2]) boxB(W, LUMBER, x, .35, z, .16, ph, .16, 0, .04);
+    for (let z = -d / 2 + d / 4; z < d / 2 - .01; z += d / 4) for (const x of [-w / 2, w / 2]) boxB(W, LUMBER, x, .35, z, .16, ph, .16, 0, .04);
+    if (t > .55) for (const y of [1.6, h]) if (y <= ph + .36) { box(W, LUMBER, 0, y + .35, -d / 2, w, .14, .14, 0, .03); box(W, LUMBER, 0, y + .35, d / 2, w, .14, .14, 0, .03); box(W, LUMBER, -w / 2, y + .35, 0, .14, .14, d, 0, .03); box(W, LUMBER, w / 2, y + .35, 0, .14, .14, d, 0, .03); }
+    if (t > .85) for (let x = -w / 2; x <= w / 2 + .01; x += w / 4) W.add(ex([[-d / 2 - .2, 0], [d / 2 + .2, 0], [0, 1.6]]), LUMBER, at(x, h + .35, 0, PI / 2, 1, 1, .12), .04);
+  }
+  function ribbon(d) { for (const sx of [-1.3, 1.3]) cyl(W, 0xc9a24a, sx, 0, d / 2 + 1.4, .05, 1.1, 6, 0); box(W, 0xd9283c, 0, .95, d / 2 + 1.4, 2.6, .12, .03, 0, 0); W.add(Geo.ico0, 0xd9283c, at(0, .95, d / 2 + 1.42, 0, .14, .1, .05), 0); }
+  function balloons(x, z, anim) { const g = new THREE.Group(); placeOnBase(g, x, 0, z, 0); const saved = W, sb = base.clone(); W = new Batch(); base.identity(); for (let k = 0; k < 5; k++) { const a = k * 1.3, bx = Math.cos(a) * .3, bz = Math.sin(a) * .25, by = 2.4 + (k % 3) * .3; W.add(Geo.ico1, pick([0xff5f87, 0xffd166, 0x6fa8ff, 0x9fd38a, 0xffffff]), at(bx, by, bz, 0, .28, .34, .28), 0); box(W, 0xdddddd, bx * .5, by / 2, bz * .5, .01, by, .01, 0, 0); } const b = W; W = saved; base.copy(sb); anim.push({ kind: 'balloon', g, batch: b, y0: 0 }); }
+  const clamp01 = v => Math.max(0, Math.min(1, v));
+  const WORKER_SPOTS = (w, d) => [[-w / 2 - .2, d / 2 + .9, PI], [w / 2 - .6, d / 2 + .7, PI + .3], [-1.2, d / 2 + 1.6, -.5]];
+
+  // Build the dynamic content of one plot for a visual state from the simulation.
+  function buildPlot(pid, v) {
+    const A = PLOT_ANCHOR[pid], orig = plotOrig[pid];
+    const group = new THREE.Group(); group.name = 'plot:' + pid + ':dynamic';
+    const anim = []; let clipOrig = 1e4, clipNew = 1e4, showOrig = false;
+    const saved = { W, F, GL, rnd }; W = new Batch(); F = new Batch(); GL = new Batch(); dyn = true; addTarget = group;
+    rnd = mulberry32([...(pid + (v.name || '') + (v.kind || ''))].reduce((a, c) => a * 31 + c.charCodeAt(0) | 0, 7));
+    const w = A.w, d = A.d, ph = v.phase, prog = v.progress ?? 1, newKind = v.kind && GEN[v.kind] ? v.kind : null;
+    const building = (kind, name) => GEN[kind](name || '');
+    withT(A.x, 0, A.z, A.ry, () => {
+      if (v.mode === 'original') showOrig = true;
+      else if (v.mode === 'structure' && newKind) building(newKind, v.name);
+      else if (v.mode === 'vacant') { dirtLot(w, d); }
+      else if (v.mode === 'demolition') {
+        const order = ['approved', 'fenced', 'equipment', 'dismantle', 'demolished', 'rubble', 'clearing', 'cleared'], k = Math.max(0, order.indexOf(ph));
+        const standing = v.building && !v.building.original ? v.building.kind : null;
+        if (k <= 3) { if (v.original) showOrig = true; else if (standing && GEN[standing]) { const r = building(standing, ''); if (k === 3) clipNew = Math.max(1.0, r.h * (1 - .7 * prog)); } }
+        if (k === 3 && v.original) clipOrig = Math.max(1.0, 7.8 * (1 - .75 * prog));
+        if (k >= 1 && k < 7) fenceAround(w, d, true);
+        if (k >= 2 && k < 7) { excavator(-w / 2 + 1.0, d / 2 + .3, .5, v.crew && !v.paused ? anim : null); dumpster(w / 2 + .2, -d / 2 + .4, k >= 6 ? .9 : k >= 4 ? .5 : 0, PI / 2); }
+        if (k === 3) rubble(w * .9, d * .7, .25 + .3 * prog, [0x9a958c, 0xb5654a, 0xcfc6b2]);
+        if (k === 4 || k === 5) { rubble(w, d, k === 4 ? .9 : 1.0, [0x9a958c, 0xb5654a, 0xcfc6b2, 0x8f6b52]); if (k === 4) for (const [x, z, ww] of [[-w / 2 + .3, 0, .3], [w / 2 - .3, -.6, .3], [-.8, -d / 2 + .2, 2.2]]) boxB(W, 0xd9cbb0, x, 0, z, ww === .3 ? .3 : ww, R(.6, 1.4), ww === .3 ? 2.2 : .3, 0, .05); }
+        if (k === 6) { rubble(w, d, Math.max(.05, 1 - prog), [0x9a958c, 0xb5654a, 0xcfc6b2]); dirtLot(w, d); }
+        if (k >= 7) dirtLot(w, d);
+        if (k === 0) projectBoard(-w / 2 - .2, d / 2 + 1.6, 'Demolition approved', v.name ? 'Demolition of ' + v.name : 'Demolition', 'warn');
+        else if (k < 7) projectBoard(w / 2 - .4, d / 2 + 1.6, v.paused ? 'Work paused' : 'Demolition in progress', v.name || '', 'warn');
+      } else if (v.mode === 'construction' || v.mode === 'renovation') {
+        const order = v.mode === 'renovation' ? ['planning', 'permits', 'interior', 'inspection', 'opening'] : ['planning', 'permits', 'siteprep', 'foundation', 'framing', 'roof', 'windows', 'interior', 'landscaping', 'inspection', 'completion', 'opening'];
+        const k = Math.max(0, order.indexOf(ph));
+        const title = v.paused ? 'Work paused' : ph === 'opening' ? 'Grand opening!' : ph === 'permits' ? 'Permit pending' : 'Coming soon';
+        if (v.mode === 'renovation') {
+          if (v.original) showOrig = true; else if (v.building && GEN[v.building.kind]) building(v.building.kind, ''); else if (newKind) building(newKind, '');
+          if (k >= 2 && k < 4) { scaffold(w, d, 3.6); dumpster(w / 2 + .3, d / 2 + 1.2, .4 + .4 * prog, 0); }
+          if (k < 4) projectBoard(-w / 2 - .3, d / 2 + 1.7, title, 'Renovation · ' + (v.name || ''));
+          if (k >= 4) { ribbon(d); balloons(-1.8, d / 2 + 1.6, anim); balloons(1.8, d / 2 + 1.6, anim); }
+        } else {
+          if (k <= 1) { dirtLot(w, d); for (const [x, z] of [[-w / 2, -d / 2], [w / 2, -d / 2], [-w / 2, d / 2], [w / 2, d / 2]]) { cyl(W, LUMBER, x, 0, z, .04, .6, 6, 0); box(W, ORANGE, x, .58, z, .12, .04, .02, 0, 0); } }
+          if (k === 2) { dirtLot(w, d); fenceAround(w, d); excavator(-w / 2 + 1.2, d / 2 - .2, .4, v.crew && !v.paused ? anim : null); for (let i = 0; i < 4; i++) W.add(Geo.dode, SOIL, at(R(-w / 3, w / 3), .2, R(-d / 3, d / 4), R(0, 6), R(.6, 1.1), R(.35, .6), R(.6, 1.0)), .05); }
+          if (k === 3) { dirtLot(w, d); fenceAround(w, d); slab(w, d, prog); dumpster(w / 2 + .3, -d / 2 + .4, .2, PI / 2); }
+          if (k === 4) { fenceAround(w, d); slab(w, d, 1); framing(w, d, 3.6, prog); }
+          if (k >= 5 && newKind) { const r = building(newKind, k >= 10 ? v.name : ''); if (k === 5) clipNew = .6 + (r.h - .6) * clamp01(.25 + .75 * prog); }
+          if (k >= 5 && k <= 6) { scaffold(w, d, k === 5 ? 3.0 + 1.6 * prog : 4.4); fenceAround(w, d); }
+          if (k === 7) { fenceAround(w, d); dumpster(w / 2 + .4, d / 2 + 1.1, .6, 0); }
+          if (k === 8) for (let i = 0; i < Math.round(8 * prog) + 2; i++) shrub(R(-w / 2, w / 2), d / 2 + R(1.0, 2.2), R(.3, .45));
+          if (k === 9) for (const sx of [-1.6, 1.6]) { cone(W, ORANGE, sx, 0, d / 2 + 1.5, .2, .55, 8, 0); box(W, 0xffffff, sx, .3, d / 2 + 1.5, .26, .06, .26, 0, 0); }
+          if (k < 10) projectBoard(-w / 2 - .4, d / 2 + 1.8, title, (v.name || 'New building') + (v.paused ? '' : ' · ' + (PHASE_LABEL[ph] || '')));
+          if (k >= 11) { ribbon(d); balloons(-1.9, d / 2 + 1.7, anim); balloons(1.9, d / 2 + 1.7, anim); }
+          else if (k === 10) projectBoard(-w / 2 - .4, d / 2 + 1.8, 'Opening soon', v.name || '');
+        }
+      }
+      if (v.forSale && !v.paused) { cyl(W, P.white, w / 2 + .6, 0, d / 2 + 2.0, .05, 1.5, 6, 0); box(W, P.white, w / 2 + .9, 1.45, d / 2 + 2.0, .7, .05, .05, 0, 0); dynSign('For sale', 'sale', w / 2 + 1.1, 1.0, d / 2 + 2.0, 1.2); }
+      if (v.closed && (v.mode === 'original' || v.mode === 'structure')) { for (const s of [-1, 1]) box(W, 0xb07a52, 0, 1.4, d / 2 + .12, 1.5, .14, .04, 0, 0, s * .6); dynSign('Closed', 'warn', 0, 2.5, d / 2 + .1, 1.3); }
+    });
+    const mats = matsFor(pid + ':n');
+    meshesInto(group, { W, F, GL }, mats, 'plot:' + pid + ':structure');
+    for (const a of anim) { a.mesh = new THREE.Mesh(a.batch.geometry(), mats.world); a.mesh.castShadow = true; a.g.add(a.mesh); group.add(a.g); }
+    ({ W, F, GL, rnd } = saved); dyn = false; addTarget = null;
+    mats.plane.constant = clipNew; if (orig) { matsFor(pid + ':o').plane.constant = clipOrig; orig.group.visible = showOrig; }
+    return { group, anim };
+  }
+  const PHASE_LABEL = Object.fromEntries([['siteprep', 'site preparation'], ['foundation', 'foundation'], ['framing', 'framing'], ['roof', 'roof & exterior'], ['windows', 'windows & doors'], ['interior', 'interior'], ['landscaping', 'landscaping'], ['inspection', 'inspection'], ['planning', 'planning'], ['permits', 'permits']]);
+  function disposeGroup(g) { g.traverse(o => { if (o.isMesh) { o.geometry.dispose(); if (o.userData.dispose || o.parent?.userData?.dispose) o.material.dispose?.(); if (o.material?.map && dynSignCache.size > 60) { /* keep cache small */ } } }); }
+  // Public: show what the simulation says is on a plot. Rebuilds only when something visible changed.
+  function setPlotVisual(pid, v) {
+    if (!PLOT_ANCHOR[pid]) return false;
+    const key = [v.mode, v.kind, v.name, v.phase, Math.floor((v.progress ?? 1) * 8), v.paused ? 1 : 0, v.crew ? 1 : 0, v.forSale ? 1 : 0, v.closed ? 1 : 0, v.original ? 1 : 0, v.building?.kind].join('|');
+    if (plotKeys[pid] === key) return false;
+    plotKeys[pid] = key;
+    if (plotDyn[pid]) { scene.remove(plotDyn[pid].group); disposeGroup(plotDyn[pid].group); }
+    plotDyn[pid] = buildPlot(pid, v); scene.add(plotDyn[pid].group);
+    if (pid === 'P005') smokeOn = v.mode === 'original' && !v.closed;
+    return true;
+  }
+  function animatePlots(t) {
+    for (const p of Object.values(plotDyn)) for (const a of p.anim) {
+      if (a.kind === 'arm') a.g.rotation.x = Math.sin(t * 1.3) * .25 - .1;
+      if (a.kind === 'balloon') a.g.position.y = Math.sin(t * 1.7 + a.g.position.x) * .08;
+    }
+  }
+  const plotGroups = () => [...Object.values(plotOrig).filter(o => o.group.visible).map(o => o.group), ...Object.values(plotDyn).map(p => p.group)];
+  function crewSpots(pid) { const A = PLOT_ANCHOR[pid]; if (!A) return []; const c = Math.cos(A.ry), sn = Math.sin(A.ry); return WORKER_SPOTS(A.w, A.d).map(([x, z, yaw]) => [A.x + x * c + z * sn, A.z - x * sn + z * c, yaw + A.ry]); }
+
   const stats = { sites: siteInfo.map(s => ({ name: s.name, x: s.x, z: s.z, min: s.full.min.toArray(), max: s.full.max.toArray() })), buildMs: Math.round(performance.now() - t0), triangles: (worldMesh.geometry.attributes.position.count + folMesh.geometry.attributes.position.count + glowMesh.geometry.attributes.position.count) / 3, locations: siteInfo.map(s => s.name) };
-  return { sun, hemi, update, siteInfo, fitBoxes: siteInfo.map(s => s.box), stats, state };
+  return { sun, hemi, update, siteInfo, fitBoxes: siteInfo.map(s => s.box), stats, state, setPlotVisual, plotGroups, crewSpots, PLOT_ANCHOR, plotKey: pid => plotKeys[pid] };
 }
