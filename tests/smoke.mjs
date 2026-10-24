@@ -87,17 +87,17 @@ async function test(name, fn) {
 }
 
 // ======================================================================
-await test('boots without errors; welcome screen shows v0.5.0; no save -> Continue disabled', async () => {
+await test('boots without errors; welcome screen shows v0.6.0; no save -> Continue disabled', async () => {
   const p = await open();
   ok(await p.isVisible('#welcome'), 'welcome screen should be visible');
-  ok((await p.textContent('#verWelcome')).trim() === 'v0.5.0', 'welcome version text');
+  ok((await p.textContent('#verWelcome')).trim() === 'v0.6.0', 'welcome version text');
   ok(await p.isDisabled('#btnContinue'), 'Continue disabled without save');
   ok(await p.isEnabled('#btnNew'), 'New Game enabled');
   const m0 = await tlw(p, '__tlw.state.minutes'); await p.waitForTimeout(800);
   ok(await tlw(p, '__tlw.state.minutes') === m0, 'simulation should not run on the title screen');
   await p.tap('#btnSettings');
   ok(await p.isVisible('#settings'), 'settings opens from title');
-  ok((await p.textContent('#verSettings')).includes('v0.5.0'), 'settings shows version');
+  ok((await p.textContent('#verSettings')).includes('v0.6.0'), 'settings shows version');
   await p.tap('#setClose');
   ok(p.errors.length === 0, 'console errors: ' + p.errors.join(' | '));
   if (SHOTS) await p.screenshot({ path: path.join(SHOTS, 'title-portrait.png') });
@@ -348,7 +348,7 @@ await test('autosaves when the app is backgrounded (only after play has started)
   const hide = () => p.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => true }); document.dispatchEvent(new Event('visibilitychange')); });
   await hide(); ok(await p.evaluate(() => !localStorage.getItem('tlw-save')), 'no save created from the title screen');
   await startNew(p); await p.waitForTimeout(500); await hide();
-  const s = await p.evaluate(() => JSON.parse(localStorage.getItem('tlw-save'))); ok(s && s.day === 1 && s.version === '0.5.0' && s.saveFormat === 5 && s.society, 'autosave written');
+  const s = await p.evaluate(() => JSON.parse(localStorage.getItem('tlw-save'))); ok(s && s.day === 1 && s.version === '0.6.0' && s.saveFormat === 5 && s.society, 'autosave written');
   ok(!s.events[0].includes('Town saved'), 'quiet autosave does not spam the feed');
   await p.context().close();
 });
@@ -720,6 +720,46 @@ await test('v0.5 saves keep the whole society; export and import; optional offli
   ok(await q.isVisible('#summary') && (await q.textContent('#sumText')).includes('while you were away'), 'away summary shown');
   ok(await q.evaluate(() => __tlw.debug.society().checkInvariants().length === 0), 'invariants hold after catching up');
   await q.context().close();
+});
+
+/* ======================= v0.6 — living minds ======================= */
+await test('AI residents: a local model picks plans and decisions; answers show in the town, sheet and diary', async () => {
+  const p = await open(devices['iPhone 13'], { storage: { 'tlw-settings': JSON.stringify({ shadows: false, quality: 'medium', aiEnabled: true, aiEndpoint: 'http://llm.test/v1', aiModel: 'tiny-test' }) } });
+  const seen = { chat: 0, bodies: [] };
+  await p.route('http://llm.test/v1/**', async r => { // a stand-in for Ollama / LM Studio
+    const url = r.request().url();
+    if (url.endsWith('/models')) return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: [{ id: 'tiny-test' }] }) });
+    const body = JSON.parse(r.request().postData()); seen.chat++; seen.bodies.push(body);
+    const prompt = body.messages.at(-1).content;
+    let content = '{"ok": true}';
+    if (prompt.includes('Choose exactly one option')) content = '<think>hmm</think> Sure! ```json\n{"choice": 1, "reason": "Because today feels right"}\n```';
+    else if (prompt.includes('diary')) content = '{"text": "Today was long but good. I keep thinking about tomorrow."}';
+    else if (prompt.includes('Two neighbours meet')) content = '{"a": "Lovely morning!", "b": "It really is."}';
+    return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ choices: [{ message: { content } }] }) });
+  });
+  await startNew(p); await p.tap('#pause');
+  await p.tap('#menu'); ok(await p.isChecked('#optAI') && await p.isVisible('#optAIEndpoint'), 'AI settings shown');
+  await p.tap('#aiTest'); await p.waitForFunction(() => document.getElementById('aiStatus').textContent.includes('Connected'), null, { timeout: 10000 });
+  await p.tap('#setClose');
+  // run to just after 6:00 next morning, when residents choose their intentions; the model answers while paused
+  await p.evaluate(() => { const S = __tlw.debug.society(); while (!(S.hour === 6)) S.advance(60); S.advance(5); });
+  await p.waitForFunction(() => __tlw.debug.society().s.ai.answered >= 4, null, { timeout: 60000 });
+  const S = await p.evaluate(() => { const S = __tlw.debug.society(); return { answered: S.s.ai.answered, ai: Object.values(S.s.people).filter(x => x.intent?.source === 'ai').map(x => x.intent.reason) }; });
+  ok(S.ai.length >= 4 && S.ai.every(r => r === 'Because today feels right'), 'intentions chosen by the model: ' + JSON.stringify(S));
+  const b0 = seen.bodies.find(b => b.messages.at(-1).content.includes('Choose exactly one option')); ok(b0.model === 'tiny-test' && b0.messages[0].role === 'system' && /Personality:/.test(b0.messages.at(-1).content), 'prompt carries the resident’s persona');
+  await p.tap('#townBtn'); await p.waitForTimeout(300);
+  ok((await p.textContent('#townBody')).includes('AI minds') && (await p.textContent('#townBody')).includes('Because today feels right'), 'overview lists AI decisions');
+  await p.tap('#townClose'); await p.tap('#people'); await p.tap('#grab'); await p.waitForTimeout(300);
+  ok((await p.textContent('#sLife')).includes('Today') && await p.locator('#sLife .ai').count() >= 1, 'journal marks AI-chosen plans');
+  // diaries at 22:00 get rewritten by the model
+  await p.evaluate(() => { const S = __tlw.debug.society(); while (!(S.hour === 22)) S.advance(60); S.advance(5); });
+  await p.waitForFunction(() => Object.values(__tlw.debug.society().s.people).some(x => x.diary.at(-1)?.source === 'ai'), null, { timeout: 90000 });
+  // model offline: the town carries on by its own rules
+  await p.unroute('http://llm.test/v1/**'); await p.route('http://llm.test/v1/**', r => r.abort());
+  const n = await p.evaluate(() => { const S = __tlw.debug.society(); S.advance(2 * 1440); return { fb: S.s.ai.fallbacks, inv: S.checkInvariants() }; });
+  ok(n.inv.length === 0 && n.fb > 0, 'unanswered questions fall back to the rules: ' + JSON.stringify(n));
+  ok(p.errors.filter(e => !/ERR_FAILED|net::/.test(e)).length === 0, 'console errors: ' + p.errors.join(' | '));
+  await p.context().close();
 });
 
 await browser.close();

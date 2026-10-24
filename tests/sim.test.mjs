@@ -282,7 +282,7 @@ test('integration: 100+ game days, invariants every day, state stays bounded', (
 function findStory(maxSeeds = 80, days = 100) { // the story is emergent: look for a town where it happened
   for (let seed = 1; seed <= maxSeeds; seed++) {
     const S = Society.create(seed); let hit = false;
-    for (let d = 0; d < days && !hit; d++) { S.advance(DAY); hit = S.s.events.some(e => e.type === 'business.opened' && e.plot === 'P005') && S.s.events.some(e => e.type === 'project.demolition' && e.plot === 'P005'); }
+    for (let d = 0; d < days && !hit; d++) { S.advance(DAY); hit = S.s.events.some(e => e.type === 'business.opened' && e.plot === 'P005') && S.s.events.some(e => e.type === 'project.demolition' && e.plot === 'P005') && S.s.events.some(e => e.type === 'property.sold' && e.plot === 'P005' && e.who[0] !== 'R1'); }
     if (hit) { run(S, 2); return { S, seed }; }
   }
   return {};
@@ -303,4 +303,75 @@ test('the defining scenario plays out autonomously in some towns', () => {
   const tl = S.propertyInfo('P005').timeline.map(t => t.text).join(' / ');
   for (const w of ['closed', 'sale', 'bought', 'demolition', 'construction', 'opened']) assert.match(tl, new RegExp(w, 'i'));
   const bh = S.s.plots.P005.buildingHistory; assert.ok(bh.length >= 2 && bh[0].to, 'old building has an end date');
+});
+
+/* ---------------- v0.6: living minds ---------------- */
+test('minds: daily intentions vary, choices are weighted (not always the top score), whims happen', () => {
+  const S = Society.create(41); const flags = { surprise: 0, whim: 0, total: 0 }, kinds = {};
+  const orig = S.decide.bind(S); S.decide = p => { orig(p); flags.total++; if (p.decision.whim) flags.whim++; if (p.decision.surprise) flags.surprise++; };
+  for (let d = 0; d < 21; d++) { S.advance(DAY); for (const p of Object.values(S.s.people)) (kinds[p.id] ||= new Set()).add(p.intent?.kind); }
+  assert.ok(Object.values(kinds).filter(k => k.size >= 3).length >= 6, 'most residents pursue several different intentions over three weeks');
+  assert.ok(flags.surprise > flags.total * .01, `some choices are not the top-scoring one (${flags.surprise}/${flags.total})`);
+  assert.ok(flags.whim >= 1, 'whims happen');
+  for (const p of Object.values(S.s.people)) assert.ok(p.intent && p.intent.label && p.intent.reason, p.name + ' has an intention with a reason');
+  assert.deepEqual(S.checkInvariants(), []);
+});
+
+test('minds: moods react to events and personalities drift, within bounds', () => {
+  const S = Society.create(42); run(S, 2);
+  const o = S.s.people.R1, m0 = o.mood, frug0 = o.traits.frugality;
+  S.closeBusiness(S.s.businesses.B1, 'test');
+  assert.ok(o.mood < m0 - .3, 'closing the bakery hurts');
+  assert.ok(o.traits.frugality > frug0, 'and makes Oliver more careful with money');
+  run(S, 100);
+  for (const p of Object.values(S.s.people)) for (const k of Object.keys(p.base)) assert.ok(Math.abs(p.traits[k] - p.base[k]) <= .2501 && p.traits[k] >= 0 && p.traits[k] <= 1, `${p.name} ${k} drifted too far`);
+  assert.ok(Object.values(S.s.people).some(p => S.traitChanges(p).length), 'someone changed over 100 days');
+});
+
+test('minds: habits are learned from experience; life events and diaries are recorded', () => {
+  const S = Society.create(43); run(S, 30, true);
+  assert.ok(Object.values(S.s.people).some(p => Object.keys(p.habits).length), 'habits formed');
+  let n = 0; for (let k = 0; k < 40; k++) S.lifeEvents(S.day); n = S.s.events.filter(e => e.type.startsWith('life.')).length;
+  assert.ok(n >= 3, 'life events happen: ' + n); assert.deepEqual(S.checkInvariants(), [], 'windfalls and bills keep the books balanced');
+  for (const p of Object.values(S.s.people)) { assert.ok(p.diary.length >= 25, p.name + ' keeps a diary'); assert.ok(!new RegExp('\\b' + p.name + ' (has|is)\\b').test(p.diary.at(-1).text), 'diary in first person: ' + p.diary.at(-1).text); }
+  assert.ok(S.journal('R1').diary.length && 'mood' in S.journal('R1') && 'intent' in S.journal('R1'));
+});
+
+test('AI minds: questions queue up, valid answers are applied, bad or late answers fall back to the rules', () => {
+  const S = Society.create(44); S.setMindEnabled(true);
+  S.advance(DAY); // through the next morning
+  const q = S.s.ai.queue.find(x => x.type === 'intent'); assert.ok(q, 'morning intention questions are asked');
+  const ctx = S.mindContext(q.pid); for (const k of ['name', 'personality', 'mood', 'ambition', 'relationships', 'memories', 'time']) assert.ok(k in ctx, 'context has ' + k);
+  const last = q.options.length - 1;
+  assert.equal(S.answerMind(q.id, last, 'I just need a change of scene'), true);
+  const p = S.s.people[q.pid]; assert.equal(p.intent.source, 'ai'); assert.equal(p.intent.label, q.options[last]); assert.equal(p.intent.reason, 'I just need a change of scene');
+  const q2 = S.s.ai.queue.find(x => x.type === 'intent'); const before = { ...S.s.people[q2.pid].intent };
+  assert.equal(S.answerMind(q2.id, 99, 'nonsense'), false, 'out-of-range choices are rejected');
+  assert.equal(S.s.people[q2.pid].intent.source, 'self'); assert.equal(S.s.people[q2.pid].intent.label, before.label);
+  assert.equal(S.answerMind('Q-nope', 0), false);
+  // a struggling business asks its owner what to do; nobody answers, so the rules decide after the deadline
+  const b = S.s.businesses.B1; b.trouble = 6; S.recover(b, S.day);
+  const rq = S.pendingMind('recovery', 'B1'); assert.ok(rq && rq.options.length >= 2, 'owner is asked how to respond');
+  const n0 = b.recoveries.length; S.advance(5 * HOUR);
+  assert.ok(!S.pendingMind('recovery', 'B1') && b.recoveries.length === n0 + 1, 'unanswered question resolved by the rules');
+  assert.ok(S.s.ai.fallbacks >= 1);
+  // a friend asked for money says no through the mind
+  b.recoveryTexts = { 'ask-friend': 'x' }; S.s.accounts.R4 = (S.s.accounts.R4 || 0); S.askForHelp(S.s.people.R1, b);
+  const lq = S.s.ai.queue.find(x => x.type === 'lend');
+  if (lq) { S.answerMind(lq.id, 1, 'I can’t risk it right now'); assert.ok(S.s.events.some(e => e.type === 'business.refused' && e.text.includes('I can’t risk it right now'))); }
+  // switching the mind off resolves everything that was waiting
+  S.setMindEnabled(false); assert.equal(S.s.ai.queue.length, 0);
+  assert.deepEqual(S.checkInvariants(), []);
+  const R = Society.fromJSON(JSON.parse(JSON.stringify(S.toJSON()))); assert.equal(R.s.ai.answered, S.s.ai.answered);
+});
+
+test('AI minds: a buyer who passes doesn’t bid; with the mind off the town runs exactly as the rules say', () => {
+  const S = Society.create(45); S.setMindEnabled(true);
+  S.advance(11 * HOUR); // 10:00 property market: the orchard lot is for sale
+  const bids = S.s.ai.queue.filter(x => x.type === 'bid'); assert.ok(bids.length >= 1, 'interested buyers are asked first');
+  for (const q of bids) S.answerMind(q.id, 1, 'Not the right time');
+  S.advance(DAY);
+  assert.equal(S.s.plots.P011.owner, 'town', 'nobody bought after everyone passed');
+  const A = Society.create(46), B = Society.create(46); B.setMindEnabled(true); B.setMindEnabled(false);
+  run(A, 10); run(B, 10); assert.equal(JSON.stringify(A.s.people), JSON.stringify(B.s.people));
 });
