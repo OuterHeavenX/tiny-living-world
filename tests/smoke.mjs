@@ -571,7 +571,7 @@ await test('scene stays within a mobile budget (draw calls, triangles, build tim
   ok(info.calls > 0 && info.calls <= 140, 'draw calls per frame: ' + info.calls);
   ok(info.triangles < 300000, 'triangles per frame: ' + info.triangles);
   ok(w.buildMs < 3000, 'world build took ' + w.buildMs + 'ms');
-  results.push(`      (${info.calls} draw calls, ${Math.round(info.triangles / 1000)}k triangles, built in ${w.buildMs}ms under software GL)`);
+  console.log(`      (${info.calls} draw calls, ${Math.round(info.triangles / 1000)}k triangles, built in ${w.buildMs}ms under software GL)`);
   await p.context().close();
 });
 

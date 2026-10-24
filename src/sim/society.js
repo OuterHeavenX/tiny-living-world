@@ -921,6 +921,7 @@ export class Society {
     const pr = { id, type, plot: plot.id, owner: plot.owner, target: { ...target, name }, title, phase: 0, done: 0, phaseMinutes: phases.map(p => p.w / wsum * workDays * WORK_MINUTES), budget, spent: 0, paidPhase: -1, status: 'active', blocker: null, started: this.day, startedAt: s.abs, finished: null, crew: false, pausedSince: null, source: opts.source || 'simulation', expectedDays: workDays };
     s.projects[id] = pr; plot.project = id;
     if (type === 'demolition') { const b = s.buildings[plot.building]; if (b) b.status = 'demolishing'; }
+    if (type === 'construction') { const b = s.buildings[plot.building]; if (b && b.land) { b.status = 'demolished'; const h = plot.buildingHistory.find(x => x.building === b.id && x.to == null); if (h) h.to = this.day; plot.building = null; } } // open land is cleared for the new building
     this.record(type === 'demolition' ? 'project.demolition' : 'project.started', { who: [plot.owner].filter(x => s.people[x]), plot: plot.id, text: `${this.nameOf(plot.owner)} began the ${title} at ${plot.address}.`, imp: 4, source: pr.source, data: { project: id, budget }, property: true });
     this.tryFundPhase(pr);
     s.visualVer++;

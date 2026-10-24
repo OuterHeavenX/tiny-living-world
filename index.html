@@ -667,7 +667,7 @@ function save(quiet = false) {
     if (localStorage.getItem(SAVE_KEY) !== json) throw new Error('verify'); // read back: never report a save that didn't stick
   } catch { toast('Couldn’t save — browser storage is unavailable or full'); return false; }
   saveProblem = null;
-  if (!quiet) { log('Town saved to this browser.', true); toast('Town saved ✓'); }
+  if (!quiet) { log('Town saved to this browser.'); toast('Town saved ✓'); }
   return true;
 }
 applySave(readSave());
